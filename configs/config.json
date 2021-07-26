@@ -1,8 +1,1 @@
-{
-    "43124": {
-        "target": "nps.futa.xyz"
-    },
-    "43125": {
-        "target": "www.baidu.com"
-    }
-}
+{"12345":{"localPort":12345,"remotePort":44546,"remoteAddress":"nps.futa.xyz","connectionType":"In","status":"Active"},"46574":{"localPort":46574,"remotePort":46574,"remoteAddress":"help.yongchangguo.com","connectionType":"In","status":"Active"}}

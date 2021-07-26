@@ -1,0 +1,9 @@
+{
+  "12345": {
+    "localPort": 12345,
+    "remotePort": 44546,
+    "remoteAddress": "nps.futa.xyz",
+    "connectionType": "In",
+    "status": "Active"
+  }
+}

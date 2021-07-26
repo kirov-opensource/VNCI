@@ -1,19 +1,22 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/olekukonko/tablewriter"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strconv"
 )
 
-var connections map[int]ConnectionConfig
+var connections = make(map[int]ConnectionConfig)
 var configPath = "./configs/config.json"
 
-var runAs = flag.String("r", "t", "s:Service,t:Tools")
+var runAs = *(flag.String("r", "t", "s:Service,t:Tools"))
 
 func RunCommand(name string, arg ...string) error {
 	cmd := exec.Command(name, arg...)
@@ -44,66 +47,102 @@ func RunCommand(name string, arg ...string) error {
 	return nil
 }
 
-func Exists(name string) (bool, error) {
-	_, err := os.Stat(name)
-	if os.IsNotExist(err) {
-		return false, nil
+// Exists reports whether the named file or directory exists.
+func Exists(name string) bool {
+	if _, err := os.Stat(name); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
 	}
-	return err != nil, err
+	return true
 }
 
 func SaveConfig() {
+	fmt.Println("正在保存...")
 	text, err := json.Marshal(connections)
 	if err != nil {
-		fmt.Println("serialize err:", err)
+		fmt.Println("保存失败(序列化):", err)
 
 	}
 	err = ioutil.WriteFile(configPath, text, 0777)
 	if err != nil {
-		fmt.Println("write file err:", err)
+		fmt.Println("保存失败:", err)
+	} else {
+		fmt.Println("保存成功")
 	}
 }
 
 func InitialConfig() {
-	fileExist, err := Exists(configPath)
-
-	if err != nil {
-		fmt.Println("check file exist err:", err)
-		return
-	}
+	fileExist := Exists(configPath)
 
 	if !fileExist {
+		fmt.Println("未找到配置文件，正在初始化...")
 		fileInfo, err := os.Create(configPath)
 
 		if err != nil {
-			fmt.Println("create file err:", err)
+			fmt.Println("初始化失败:", err)
+		} else {
+			fileInfo.Write([]byte("{}"))
+			fmt.Println("初始化成功")
 		}
-		fileInfo.Write([]byte("{}"))
 		fileInfo.Close()
 	}
 }
 
 func LoadConnections() {
+
+	fmt.Println("正在加载配置...")
+
 	InitialConfig()
 
 	fileInfo, err := os.OpenFile(configPath, os.O_RDONLY, 0600)
 
 	if err != nil {
-		fmt.Println("read file err:", err)
+		fmt.Println("加载配置失败(打开配置文件):", err)
 	}
 
 	data, err := io.ReadAll(fileInfo)
 
 	if err != nil {
-		fmt.Println("data read err:", err)
+		fmt.Println("加载配置失败(读取配置文件):", err)
 	}
 
 	err = json.Unmarshal(data, &connections)
 
 	if err != nil {
-		fmt.Println("data deserialized err:", err)
+		fmt.Println("加载配置失败(反序列化):", err)
+	} else {
+		fmt.Println("加载配置成功")
 	}
-	//connections = deserializedData
+}
+
+func ListTunnel() {
+	tunnelSize := len(connections)
+
+	if tunnelSize == 0 {
+		fmt.Println("暂无数据")
+		return
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"LocalPort", "RemotePort", "RemoteAddress", "Type", "Status"})
+
+	table.SetColumnColor(tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiBlackColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiRedColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiBlackColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgBlackColor},
+		tablewriter.Colors{tablewriter.Bold, tablewriter.FgBlackColor})
+
+	for _, tunnel := range connections {
+		rowData := []string{
+			strconv.Itoa(tunnel.LocalPort), strconv.Itoa(tunnel.RemotePort), tunnel.RemoteAddress, string(tunnel.ConnectionType), string(tunnel.Status),
+		}
+
+		table.Rich(rowData, []tablewriter.Colors{tablewriter.Colors{tablewriter.Bold, tablewriter.FgBlackColor, tablewriter.BgGreenColor}})
+
+		//table.Append(rowData);
+	}
+	table.Render()
 }
 
 func main() {
@@ -111,54 +150,29 @@ func main() {
 	// 把用户传递的命令行参数解析为对应变量的值
 	flag.Parse()
 
-	fmt.Println(*runAs)
+	LoadConnections()
 
-	//go RunCommand("ping", "nps.futa.xyz")
-	// cmd := exec.Command("libraries/udp2raw/udp2raw", "-s")
-	// stdout, err := cmd.StdoutPipe()
+	if runAs == "t" {
+		f := bufio.NewReader(os.Stdin) //读取输入的内容
+		for {
+			fmt.Print("请输入一些字符串>")
+			Input, _ := f.ReadString('\n') //定义一行输入的内容分隔符。
+			Input = Input[:len(Input)-1]
+			if len(Input) == 0 {
+				continue //如果用户输入的是一个空行就让用户继续输入。
+			}
+			//Input = Input[:len(Input)-1]
+			if Input == "exit" {
+				break
+			}
+			switch Input {
+			case "l":
+				ListTunnel()
+				break
+			}
+		}
+	}
 
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// cmd.Start()
-
-	// buf := bufio.NewReader(stdout)
-	// // num := 0
-
-	// for {
-	// 	line, _, _ := buf.ReadLine()
-	// 	// if num > 3 {
-	// 	// 	os.Exit(0)
-	// 	// }
-	// 	// num += 1
-	// 	fmt.Println(string(line))
-	// }
-	// go executeCommand()
-	// // 监听8080/UDP
-	// listener, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: 8080})
-	// if err != nil {
-	// 	fmt.Println("server listen error", err)
-	// }
-	// // 输出本地端的Ip
-	// fmt.Printf("Local: <%s> \n", listener.LocalAddr().String())
-
-	// // 创建一个缓冲区
-	// data := make([]byte, 1024)
-	// for {
-	// 	n, remoteAddr, err := listener.ReadFromUDP(data)
-
-	// 	if err != nil {
-	// 		fmt.Printf("error during read: %s", err)
-	// 	}
-	// 	fmt.Printf("<%s> %s\n", remoteAddr, data[:n])
-
-	// 	ipInfo := remoteAddr.IP.String() + ":" + strconv.Itoa(remoteAddr.Port)
-	// 	_, err = listener.WriteToUDP([]byte(ipInfo), remoteAddr)
-	// 	if err != nil {
-	// 		fmt.Printf(err.Error())
-	// 	}
-	// }
-
-	// fmt.Println("Hello world.")
+	fmt.Println("正在退出...")
+	SaveConfig()
 }
