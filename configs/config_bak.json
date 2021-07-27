@@ -1,9 +1,24 @@
 {
   "12345": {
+    "localAddress": "0.0.0.0",
     "localPort": 12345,
-    "remotePort": 44546,
     "remoteAddress": "nps.futa.xyz",
+    "remotePort": 44546,
+    "rawMode": "faketcp",
+    "cipherMode": "aes128cbc",
+    "authMode": "md5",
     "connectionType": "In",
     "status": "Active"
+  },
+  "46574": {
+    "localAddress": "0.0.0.0",
+    "localPort": 46574,
+    "remoteAddress": "help.yongchangguo.com",
+    "remotePort": 46574,
+    "rawMode": "faketcp",
+    "cipherMode": "aes128cbc",
+    "authMode": "md5",
+    "connectionType": "Out",
+    "status": "Disable"
   }
 }

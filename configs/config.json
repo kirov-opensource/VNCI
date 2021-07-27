@@ -1,1 +1,35 @@
-{"12345":{"localPort":12345,"remotePort":44546,"remoteAddress":"nps.futa.xyz","connectionType":"In","status":"Active"},"46574":{"localPort":46574,"remotePort":46574,"remoteAddress":"help.yongchangguo.com","connectionType":"In","status":"Active"}}
+{
+  "12345": {
+    "localAddress": "0.0.0.0",
+    "localPort": 12345,
+    "remoteAddress": "nps.futa.xyz",
+    "remotePort": 44546,
+    "rawMode": "faketcp",
+    "cipherMode": "aes128cbc",
+    "authMode": "md5",
+    "connectionType": "Client",
+    "status": "Active"
+  },
+  "32666": {
+    "localAddress": "0.0.0.0",
+    "localPort": 32666,
+    "remoteAddress": "test.example.com",
+    "remotePort": 32666,
+    "rawMode": "faketcp",
+    "cipherMode": "aes128cbc",
+    "authMode": "md5",
+    "connectionType": "Client",
+    "status": "Active"
+  },
+  "46574": {
+    "localAddress": "0.0.0.0",
+    "localPort": 46574,
+    "remoteAddress": "help.yongchangguo.com",
+    "remotePort": 46574,
+    "rawMode": "faketcp",
+    "cipherMode": "aes128cbc",
+    "authMode": "md5",
+    "connectionType": "Client",
+    "status": "Disable"
+  }
+}

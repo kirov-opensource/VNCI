@@ -8,6 +8,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
@@ -124,28 +125,140 @@ func ListTunnel() {
 		return
 	}
 
+	activeColor := tablewriter.Colors{tablewriter.FgGreenColor, tablewriter.Bold}
+	disableColor := tablewriter.Colors{tablewriter.FgRedColor, tablewriter.Bold}
+
+	inColor := tablewriter.Colors{tablewriter.FgGreenColor, tablewriter.Bold}
+	outColor := tablewriter.Colors{tablewriter.FgRedColor, tablewriter.Bold}
+
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"LocalPort", "RemotePort", "RemoteAddress", "Type", "Status"})
 
-	table.SetColumnColor(tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiBlackColor},
-		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiRedColor},
-		tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiBlackColor},
-		tablewriter.Colors{tablewriter.Bold, tablewriter.FgBlackColor},
-		tablewriter.Colors{tablewriter.Bold, tablewriter.FgBlackColor})
+	table.SetColumnColor(tablewriter.Colors{},
+		tablewriter.Colors{},
+		tablewriter.Colors{},
+		tablewriter.Colors{},
+		tablewriter.Colors{})
 
 	for _, tunnel := range connections {
+
 		rowData := []string{
 			strconv.Itoa(tunnel.LocalPort), strconv.Itoa(tunnel.RemotePort), tunnel.RemoteAddress, string(tunnel.ConnectionType), string(tunnel.Status),
 		}
+		typeColor := inColor
+		if tunnel.ConnectionType == ConnectionType_SERVER {
+			typeColor = outColor
+		}
 
-		table.Rich(rowData, []tablewriter.Colors{tablewriter.Colors{tablewriter.Bold, tablewriter.FgBlackColor, tablewriter.BgGreenColor}})
+		statusColor := activeColor
+		if tunnel.Status == StatusType_DISABLE {
+			statusColor = disableColor
+		}
 
-		//table.Append(rowData);
+		table.Rich(rowData, []tablewriter.Colors{{}, {}, {}, typeColor, statusColor})
 	}
 	table.Render()
 }
 
+func checkIPAddress(ip string) bool {
+	if net.ParseIP(ip) == nil {
+		return false
+	} else {
+		return true
+	}
+}
+
+func getValueFromStdin(parameterName string, optional bool, hasDefaultValue bool, defaultValue string, validFunc func(string) bool) string {
+	f := bufio.NewReader(os.Stdin)
+	var result string
+	promptText := "请输入" + parameterName
+	if optional {
+		promptText = "[可选]" + promptText
+	} else {
+		promptText = "[必填]" + promptText
+	}
+	if hasDefaultValue {
+		promptText += "(默认值:" + defaultValue + ")"
+	}
+	promptText += ":"
+	for {
+		fmt.Print(promptText)
+		Input, _ := f.ReadString('\n')
+		Input = Input[:len(Input)-1]
+		if len(Input) == 0 {
+			if hasDefaultValue {
+				result = defaultValue
+				break
+			}
+			if optional {
+				result = ""
+				break
+			}
+		}
+		if validFunc != nil {
+			if validFunc(Input) == true {
+				result = Input
+				break
+			}
+		} else {
+			result = Input
+			break
+		}
+		fmt.Println(parameterName + "填写有误,请重新输入")
+	}
+	return result
+}
+
+func createTunnel() {
+	//f := bufio.NewReader(os.Stdin)
+	//var localAddress, remoteAddress, rawMode, cipherMode, authMode string
+	//var localPort, remotePort int
+	var actualType ConnectionType
+	tunnelType := getValueFromStdin("通道类型(Server/Client)", false, true, "Client", nil)
+	if tunnelType == "Client" {
+		actualType = ConnectionType_CLIENT
+	} else {
+		actualType = ConnectionType_SERVER
+	}
+	localAddress := getValueFromStdin("本地监听地址", false, true, "0.0.0.0", checkIPAddress)
+	localPort, _ := strconv.Atoi(getValueFromStdin("本地端口", false, true, "32666", nil))
+	remoteAddress := getValueFromStdin("远端地址", false, false, "", nil)
+	remotePort, _ := strconv.Atoi(getValueFromStdin("远端端口", false, false, "", nil))
+
+	rawMode := getValueFromStdin("rawMode", false, true, "faketcp", nil)
+	cipherMode := getValueFromStdin("加密方式", false, true, "aes128cbc", nil)
+	authMode := getValueFromStdin("认证方式", false, true, "md5", nil)
+
+	connections[localPort] = ConnectionConfig{localAddress,
+		localPort, remoteAddress, remotePort,
+		rawMode, cipherMode, authMode, actualType, StatusType_ACTIVE}
+
+	//
+	//for {
+	//	fmt.Print("请输入本地监听地址(default:0.0.0.0)>")
+	//	Input, _ := f.ReadString('\n')
+	//	Input = Input[:len(Input)-1]
+	//	if len(Input) == 0 {
+	//		localAddress = "0.0.0.0"
+	//		break
+	//	}
+	//	if checkIPAddress(Input) {
+	//		localAddress = Input
+	//		break
+	//	}
+	//	fmt.Println("本地监听地址填写有误,请重新输入")
+	//}
+	//
+	//localAddress, _ := Input
+	//
+	//fmt.Print("请输入本地监听端口>")
+	//Input, _ := f.ReadString('\n') //定义一行输入的内容分隔符。
+	//localPort, _ := strconv.Atoi(Input)
+}
+
 func main() {
+
+	createTunnel()
 
 	// 把用户传递的命令行参数解析为对应变量的值
 	flag.Parse()
