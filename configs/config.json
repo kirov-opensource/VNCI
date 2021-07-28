@@ -1,1 +1,57 @@
-{"1":{"localAddress":"0.0.0.0","localPort":12345,"remoteAddress":"nps.futa.xyz","remotePort":44546,"rawMode":"faketcp","cipherMode":"aes128cbc","authMode":"md5","connectionType":"Client","status":"Active"},"10667":{"localAddress":"0.0.0.0","localPort":10667,"remoteAddress":"r.futa.xyz","remotePort":10667,"rawMode":"faketcp","cipherMode":"aes128cbc","authMode":"md5","connectionType":"Server","status":"Active"},"2":{"localAddress":"0.0.0.0","localPort":32666,"remoteAddress":"test.example.com","remotePort":32666,"rawMode":"faketcp","cipherMode":"aes128cbc","authMode":"md5","connectionType":"Client","status":"Active"},"3":{"localAddress":"0.0.0.0","localPort":46574,"remoteAddress":"help.yongchangguo.com","remotePort":46574,"rawMode":"faketcp","cipherMode":"aes128cbc","authMode":"md5","connectionType":"Client","status":"Disable"}}
+{
+    "1": {
+        "localAddress": "0.0.0.0",
+        "localPort": 12345,
+        "remoteAddress": "nps.futa.xyz",
+        "remotePort": 44546,
+        "rawMode": "faketcp",
+        "cipherMode": "aes128cbc",
+        "authMode": "md5",
+        "connectionType": "Client",
+        "status": "Active"
+    },
+    "12121": {
+        "localAddress": "0.0.0.0",
+        "localPort": 12121,
+        "remoteAddress": "33333",
+        "remotePort": 13333,
+        "rawMode": "faketcp",
+        "cipherMode": "aes128cbc",
+        "authMode": "md5",
+        "connectionType": "Client",
+        "status": "Active"
+    },
+    "2": {
+        "localAddress": "0.0.0.0",
+        "localPort": 32666,
+        "remoteAddress": "test.example.com",
+        "remotePort": 32666,
+        "rawMode": "faketcp",
+        "cipherMode": "aes128cbc",
+        "authMode": "md5",
+        "connectionType": "Client",
+        "status": "Active"
+    },
+    "3": {
+        "localAddress": "0.0.0.0",
+        "localPort": 46574,
+        "remoteAddress": "help.yongchangguo.com",
+        "remotePort": 46574,
+        "rawMode": "faketcp",
+        "cipherMode": "aes128cbc",
+        "authMode": "md5",
+        "connectionType": "Client",
+        "status": "Disable"
+    },
+    "33333": {
+        "localAddress": "0.0.0.0",
+        "localPort": 33333,
+        "remoteAddress": "33333",
+        "remotePort": 33333,
+        "rawMode": "faketcp",
+        "cipherMode": "aes128cbc",
+        "authMode": "md5",
+        "connectionType": "Client",
+        "status": "Active"
+    }
+}

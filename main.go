@@ -61,7 +61,7 @@ func Exists(name string) bool {
 
 func SaveConfig() {
 	fmt.Println("正在保存...")
-	text, err := json.Marshal(connections)
+	text, err := json.MarshalIndent(connections, "", "    ")
 	if err != nil {
 		fmt.Println("保存失败(序列化):", err)
 
@@ -235,6 +235,27 @@ func createTunnel() {
 func deleteTunnel() {
 	listTunnel()
 
+	f := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("请输入编号[NO],输入exit退出>")
+		Input, _ := f.ReadString('\n')
+		Input = Input[:len(Input)-1]
+		if len(Input) == 0 {
+			continue
+		}
+		if Input == "exit" {
+			break
+		}
+		dataId, err := strconv.Atoi(Input)
+		if err != nil {
+			fmt.Println("输入正确的编号")
+		}
+		if _, ok := connections[dataId]; ok {
+			delete(connections, dataId)
+			fmt.Println("删除成功")
+			break
+		}
+	}
 }
 func main() {
 
@@ -263,6 +284,8 @@ func main() {
 				listTunnel()
 			case "n":
 				createTunnel()
+			case "d":
+				deleteTunnel()
 			}
 		}
 	}
