@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/olekukonko/tablewriter"
 	"io"
 	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
 	"strconv"
+
+	"github.com/olekukonko/tablewriter"
 )
 
 var connections = make(map[int]ConnectionConfig)
@@ -117,7 +118,7 @@ func LoadConnections() {
 	}
 }
 
-func ListTunnel() {
+func listTunnel() {
 	tunnelSize := len(connections)
 
 	if tunnelSize == 0 {
@@ -132,18 +133,18 @@ func ListTunnel() {
 	outColor := tablewriter.Colors{tablewriter.FgRedColor, tablewriter.Bold}
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"LocalPort", "RemotePort", "RemoteAddress", "Type", "Status"})
+	table.SetHeader([]string{"No", "Local", "Remote", "Type", "Status"})
 
-	table.SetColumnColor(tablewriter.Colors{},
-		tablewriter.Colors{},
-		tablewriter.Colors{},
-		tablewriter.Colors{},
-		tablewriter.Colors{})
+	// table.SetColumnColor(tablewriter.Colors{},
+	// 	tablewriter.Colors{},
+	// 	tablewriter.Colors{},
+	// 	tablewriter.Colors{},
+	// 	tablewriter.Colors{})
 
-	for _, tunnel := range connections {
+	for key, tunnel := range connections {
 
 		rowData := []string{
-			strconv.Itoa(tunnel.LocalPort), strconv.Itoa(tunnel.RemotePort), tunnel.RemoteAddress, string(tunnel.ConnectionType), string(tunnel.Status),
+			strconv.Itoa(key), tunnel.LocalAddress + ":" + strconv.Itoa(tunnel.LocalPort), tunnel.RemoteAddress + ":" + strconv.Itoa(tunnel.RemotePort), string(tunnel.ConnectionType), string(tunnel.Status),
 		}
 		typeColor := inColor
 		if tunnel.ConnectionType == ConnectionTypeServer {
@@ -155,7 +156,7 @@ func ListTunnel() {
 			statusColor = disableColor
 		}
 
-		table.Rich(rowData, []tablewriter.Colors{{}, {}, {}, typeColor, statusColor})
+		table.Rich(rowData, []tablewriter.Colors{{}, {}, {}, {}, typeColor, statusColor})
 	}
 	table.Render()
 }
@@ -213,17 +214,17 @@ func getValueFromStdin(parameterName string, optional bool, hasDefaultValue bool
 func createTunnel() {
 	var actualType ConnectionType
 	tunnelType := getValueFromStdin("通道类型(Server/Client)", false, true, "Client", nil)
-	if tunnelType == "Client" {
+	if tunnelType == string(ConnectionTypeClient) {
 		actualType = ConnectionTypeClient
 	} else {
 		actualType = ConnectionTypeServer
 	}
 	localAddress := getValueFromStdin("本地监听地址", false, true, "0.0.0.0", checkIPAddress)
-	localPort, _ := strconv.Atoi(getValueFromStdin("本地端口", false, true, "32666", nil))
+	localPort, _ := strconv.Atoi(getValueFromStdin("本地端口", false, false, "", nil))
 	remoteAddress := getValueFromStdin("远端地址", false, false, "", nil)
 	remotePort, _ := strconv.Atoi(getValueFromStdin("远端端口", false, false, "", nil))
 
-	rawMode := getValueFromStdin("rawMode", false, true, "faketcp", nil)
+	rawMode := getValueFromStdin("模拟方式", false, true, "faketcp", nil)
 	cipherMode := getValueFromStdin("加密方式", false, true, "aes128cbc", nil)
 	authMode := getValueFromStdin("认证方式", false, true, "md5", nil)
 
@@ -231,10 +232,11 @@ func createTunnel() {
 		localPort, remoteAddress, remotePort,
 		rawMode, cipherMode, authMode, actualType, StatusTypeActive}
 }
+func deleteTunnel() {
+	listTunnel()
 
+}
 func main() {
-
-	createTunnel()
 
 	// 把用户传递的命令行参数解析为对应变量的值
 	flag.Parse()
@@ -244,20 +246,23 @@ func main() {
 	if runAs == "t" {
 		f := bufio.NewReader(os.Stdin) //读取输入的内容
 		for {
-			fmt.Print("请输入一些字符串>")
+			fmt.Println("l:\t列表")
+			fmt.Println("n:\t新增")
+			fmt.Println("d:\t删除")
+			fmt.Print("请输入一些字符串,输入exit退出>")
 			Input, _ := f.ReadString('\n') //定义一行输入的内容分隔符。
 			Input = Input[:len(Input)-1]
 			if len(Input) == 0 {
 				continue //如果用户输入的是一个空行就让用户继续输入。
 			}
-			//Input = Input[:len(Input)-1]
 			if Input == "exit" {
 				break
 			}
 			switch Input {
 			case "l":
-				ListTunnel()
-				break
+				listTunnel()
+			case "n":
+				createTunnel()
 			}
 		}
 	}

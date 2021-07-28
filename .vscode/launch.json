@@ -8,8 +8,10 @@
             "name": "Launch Package",
             "type": "go",
             "request": "launch",
-            "mode": "auto",
-            "program": "${workspaceFolder}"
+            "mode": "remote",
+            "program": "${workspaceFolder}",
+            "port": 2345, // 调试服务端口
+            "host": "127.0.0.1", // 调试服务IP
         }
     ]
 }
