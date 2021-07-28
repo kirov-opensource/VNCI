@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"text/template"
 
 	"github.com/olekukonko/tablewriter"
 )
@@ -59,7 +60,7 @@ func Exists(name string) bool {
 	return true
 }
 
-func SaveConfig() {
+func saveConfig() {
 	fmt.Println("正在保存...")
 	text, err := json.MarshalIndent(connections, "", "    ")
 	if err != nil {
@@ -74,7 +75,7 @@ func SaveConfig() {
 	}
 }
 
-func InitialConfig() {
+func initialConfig() {
 	fileExist := Exists(configPath)
 
 	if !fileExist {
@@ -91,13 +92,9 @@ func InitialConfig() {
 	}
 }
 
-func LoadConnections() {
+func readFile(path string) []byte {
 
-	fmt.Println("正在加载配置...")
-
-	InitialConfig()
-
-	fileInfo, err := os.OpenFile(configPath, os.O_RDONLY, 0600)
+	fileInfo, err := os.OpenFile(path, os.O_RDONLY, 0600)
 
 	if err != nil {
 		fmt.Println("加载配置失败(打开配置文件):", err)
@@ -108,8 +105,18 @@ func LoadConnections() {
 	if err != nil {
 		fmt.Println("加载配置失败(读取配置文件):", err)
 	}
+	return data
+}
 
-	err = json.Unmarshal(data, &connections)
+func loadConfig() {
+
+	fmt.Println("正在加载配置...")
+
+	initialConfig()
+
+	data := readFile(configPath)
+
+	err := json.Unmarshal(data, &connections)
 
 	if err != nil {
 		fmt.Println("加载配置失败(反序列化):", err)
@@ -232,6 +239,7 @@ func createTunnel() {
 		localPort, remoteAddress, remotePort,
 		rawMode, cipherMode, authMode, actualType, StatusTypeActive}
 }
+
 func deleteTunnel() {
 	listTunnel()
 
@@ -257,12 +265,49 @@ func deleteTunnel() {
 		}
 	}
 }
+
+func createUDP2RAWConfig(conn ConnectionConfig) {
+
+	renderModel := struct {
+		ConnectionType string
+		Local          string
+		Remote         string
+		Password       string
+		RawMode        string
+		CipherMode     string
+		AuthMode       string
+	}{
+		ConnectionType: "",
+		Local:          conn.LocalAddress + ":" + strconv.Itoa(conn.LocalPort),
+		Remote:         conn.RemoteAddress + ":" + strconv.Itoa(conn.RemotePort),
+		RawMode:        conn.RawMode,
+		CipherMode:     conn.CipherMode,
+		AuthMode:       conn.AuthMode,
+	}
+	if conn.ConnectionType == ConnectionTypeClient {
+		(&renderModel).ConnectionType = "c"
+	} else {
+		(&renderModel).ConnectionType = "s"
+	}
+
+	tmpl, _ := template.New("test").Parse(string(readFile("./templates/udp2raw.config.template")))
+	filePath := "./configs/udp2raw/" + strconv.Itoa(conn.LocalPort) + ".conf"
+	fileInfo, err := os.Create(filePath)
+	if err != nil {
+		fmt.Println("创建文件出错:", err)
+	}
+	tmpl.Execute(fileInfo, renderModel)
+	// _ = tmpl.Execute(os.Stdout, )
+}
+
 func main() {
 
 	// 把用户传递的命令行参数解析为对应变量的值
 	flag.Parse()
 
-	LoadConnections()
+	loadConfig()
+
+	createUDP2RAWConfig(connections[1])
 
 	if runAs == "t" {
 		f := bufio.NewReader(os.Stdin) //读取输入的内容
@@ -291,6 +336,6 @@ func main() {
 	}
 
 	fmt.Println("正在退出...")
-	SaveConfig()
+	saveConfig()
 	os.Exit(0)
 }

@@ -1,0 +1,8 @@
+-{{.ConnectionType}}
+-l {{.Local}}
+-r {{.Remote}}
+-a
+-k {{.Password}}
+--raw-mode {{.RawMode}}
+--cipher-mode {{.CipherMode}}
+--auth-mode {{.AuthMode}}
