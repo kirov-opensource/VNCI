@@ -146,12 +146,12 @@ func ListTunnel() {
 			strconv.Itoa(tunnel.LocalPort), strconv.Itoa(tunnel.RemotePort), tunnel.RemoteAddress, string(tunnel.ConnectionType), string(tunnel.Status),
 		}
 		typeColor := inColor
-		if tunnel.ConnectionType == ConnectionType_SERVER {
+		if tunnel.ConnectionType == ConnectionTypeServer {
 			typeColor = outColor
 		}
 
 		statusColor := activeColor
-		if tunnel.Status == StatusType_DISABLE {
+		if tunnel.Status == StatusTypeDisable {
 			statusColor = disableColor
 		}
 
@@ -200,7 +200,8 @@ func getValueFromStdin(parameterName string, optional bool, hasDefaultValue bool
 				result = Input
 				break
 			}
-		} else {
+		}
+		if optional || Input != "" {
 			result = Input
 			break
 		}
@@ -210,15 +211,12 @@ func getValueFromStdin(parameterName string, optional bool, hasDefaultValue bool
 }
 
 func createTunnel() {
-	//f := bufio.NewReader(os.Stdin)
-	//var localAddress, remoteAddress, rawMode, cipherMode, authMode string
-	//var localPort, remotePort int
 	var actualType ConnectionType
 	tunnelType := getValueFromStdin("通道类型(Server/Client)", false, true, "Client", nil)
 	if tunnelType == "Client" {
-		actualType = ConnectionType_CLIENT
+		actualType = ConnectionTypeClient
 	} else {
-		actualType = ConnectionType_SERVER
+		actualType = ConnectionTypeServer
 	}
 	localAddress := getValueFromStdin("本地监听地址", false, true, "0.0.0.0", checkIPAddress)
 	localPort, _ := strconv.Atoi(getValueFromStdin("本地端口", false, true, "32666", nil))
@@ -231,29 +229,7 @@ func createTunnel() {
 
 	connections[localPort] = ConnectionConfig{localAddress,
 		localPort, remoteAddress, remotePort,
-		rawMode, cipherMode, authMode, actualType, StatusType_ACTIVE}
-
-	//
-	//for {
-	//	fmt.Print("请输入本地监听地址(default:0.0.0.0)>")
-	//	Input, _ := f.ReadString('\n')
-	//	Input = Input[:len(Input)-1]
-	//	if len(Input) == 0 {
-	//		localAddress = "0.0.0.0"
-	//		break
-	//	}
-	//	if checkIPAddress(Input) {
-	//		localAddress = Input
-	//		break
-	//	}
-	//	fmt.Println("本地监听地址填写有误,请重新输入")
-	//}
-	//
-	//localAddress, _ := Input
-	//
-	//fmt.Print("请输入本地监听端口>")
-	//Input, _ := f.ReadString('\n') //定义一行输入的内容分隔符。
-	//localPort, _ := strconv.Atoi(Input)
+		rawMode, cipherMode, authMode, actualType, StatusTypeActive}
 }
 
 func main() {
@@ -288,4 +264,5 @@ func main() {
 
 	fmt.Println("正在退出...")
 	SaveConfig()
+	os.Exit(0)
 }

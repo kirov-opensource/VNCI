@@ -3,15 +3,15 @@ package main
 type StatusType string
 
 const (
-	StatusType_ACTIVE  StatusType = "Active"
-	StatusType_DISABLE StatusType = "Disable"
+	StatusTypeActive  StatusType = "Active"
+	StatusTypeDisable StatusType = "Disable"
 )
 
 type ConnectionType string
 
 const (
-	ConnectionType_CLIENT ConnectionType = "Client"
-	ConnectionType_SERVER ConnectionType = "Server"
+	ConnectionTypeClient ConnectionType = "Client"
+	ConnectionTypeServer ConnectionType = "Server"
 )
 
 type ConnectionConfig struct {
