@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"os"
 	"os/exec"
 	"strconv"
 	"text/template"
 
+	"github.com/miekg/dns"
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -267,8 +269,11 @@ func deleteTunnel() {
 }
 
 func createUDP2RAWConfig(conn ConnectionConfig) {
-
-	renderModel := struct {
+	actualRemoteAddress := conn.RemoteAddress
+	if !checkIPAddress(actualRemoteAddress) {
+		actualRemoteAddress = getActualIP(actualRemoteAddress)
+	}
+	confRenderModel := struct {
 		ConnectionType string
 		Local          string
 		Remote         string
@@ -279,49 +284,116 @@ func createUDP2RAWConfig(conn ConnectionConfig) {
 	}{
 		ConnectionType: "",
 		Local:          conn.LocalAddress + ":" + strconv.Itoa(conn.LocalPort),
-		Remote:         conn.RemoteAddress + ":" + strconv.Itoa(conn.RemotePort),
+		Remote:         actualRemoteAddress + ":" + strconv.Itoa(conn.RemotePort),
 		RawMode:        conn.RawMode,
 		CipherMode:     conn.CipherMode,
 		AuthMode:       conn.AuthMode,
 	}
 	if conn.ConnectionType == ConnectionTypeClient {
-		(&renderModel).ConnectionType = "c"
+		(&confRenderModel).ConnectionType = "c"
 	} else {
-		(&renderModel).ConnectionType = "s"
+		(&confRenderModel).ConnectionType = "s"
 	}
 
-	tmpl, _ := template.New("test").Parse(string(readFile("./templates/udp2raw.config.template")))
-	filePath := "./configs/udp2raw/" + strconv.Itoa(conn.LocalPort) + ".conf"
+	udp2rawConfTemplate, _ := template.New("test").Parse(string(readFile("./templates/udp2raw.config.template")))
+	filePath := "/usr/local/etc/vnci/udp2raw/" + strconv.Itoa(conn.LocalPort) + ".conf"
 	fileInfo, err := os.Create(filePath)
 	if err != nil {
 		fmt.Println("创建文件出错:", err)
 	}
-	tmpl.Execute(fileInfo, renderModel)
-	// _ = tmpl.Execute(os.Stdout, )
+	udp2rawConfTemplate.Execute(fileInfo, confRenderModel)
+
+	serviceRenderModel := struct {
+		Port string
+	}{
+		Port: strconv.Itoa(conn.LocalPort),
+	}
+
+	udp2rawServiceTemplate, _ := template.New("test").Parse(string(readFile("./templates/udp2raw.service.template")))
+	filePath = "./configs/udp2raw/vnci@udp2raw@" + strconv.Itoa(conn.LocalPort) + "@" + (&confRenderModel).ConnectionType + ".service"
+	fileInfo, err = os.Create(filePath)
+	if err != nil {
+		fmt.Println("创建文件出错:", err)
+	}
+	udp2rawServiceTemplate.Execute(fileInfo, serviceRenderModel)
+}
+
+func getActualIP(address string) string {
+	config, _ := dns.ClientConfigFromFile("/etc/resolv.conf")
+	c := new(dns.Client)
+	m := new(dns.Msg)
+	m.SetQuestion(dns.Fqdn(address), dns.TypeA)
+	m.RecursionDesired = true
+	// client 发起 DNS 请求，其中 c 为上文创建的 client，m 为构造的 DNS 报文
+	// config 为从 /etc/resolv.conf 构造出来的配置
+	r, _, err := c.Exchange(m, net.JoinHostPort(config.Servers[0], config.Port))
+	if r == nil {
+		log.Fatalf("*** error: %s\n", err.Error())
+	}
+
+	if r.Rcode != dns.RcodeSuccess {
+		return "1.1.1.1"
+		log.Fatalf("*** invalid answer name %s after MX query for %s\n", os.Args[1], os.Args[1])
+	}
+
+	// 如果 DNS 查询成功
+	for _, a := range r.Answer {
+		if dnsA, ok := a.(*dns.A); ok {
+			return dnsA.A.String()
+		}
+		// fmt.Printf("%v\n", a)
+	}
+	return "1.1.1.1"
+}
+
+func syncTunnel() {
+	listTunnel()
+
+	f := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("请输入编号[NO],输入exit退出>")
+		Input, _ := f.ReadString('\n')
+		Input = Input[:len(Input)-1]
+		if len(Input) == 0 {
+			continue
+		}
+		if Input == "exit" {
+			break
+		}
+		dataId, err := strconv.Atoi(Input)
+		if err != nil {
+			fmt.Println("输入正确的编号")
+		}
+		if _, ok := connections[dataId]; ok {
+			createUDP2RAWConfig(connections[dataId])
+			fmt.Println("同步成功")
+			break
+		}
+	}
 }
 
 func main() {
-
 	// 把用户传递的命令行参数解析为对应变量的值
 	flag.Parse()
 
 	loadConfig()
 
-	createUDP2RAWConfig(connections[1])
+	// createUDP2RAWConfig(connections[1])
 
 	if runAs == "t" {
 		f := bufio.NewReader(os.Stdin) //读取输入的内容
 		for {
-			fmt.Println("l:\t列表")
-			fmt.Println("n:\t新增")
-			fmt.Println("d:\t删除")
-			fmt.Print("请输入一些字符串,输入exit退出>")
+			fmt.Println("l(list):\t列表")
+			fmt.Println("n(new):\t新增")
+			fmt.Println("d(delete):\t删除")
+			fmt.Println("s(sync):\t同步")
+			fmt.Print("请输入一些字符串,输入e(exit)退出>")
 			Input, _ := f.ReadString('\n') //定义一行输入的内容分隔符。
 			Input = Input[:len(Input)-1]
 			if len(Input) == 0 {
 				continue //如果用户输入的是一个空行就让用户继续输入。
 			}
-			if Input == "exit" {
+			if Input == "e" {
 				break
 			}
 			switch Input {
@@ -331,6 +403,8 @@ func main() {
 				createTunnel()
 			case "d":
 				deleteTunnel()
+			case "s":
+				syncTunnel()
 			}
 		}
 	}

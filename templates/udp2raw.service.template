@@ -1,0 +1,11 @@
+[Unit]
+Description=UDP2Raw Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vnci/udp2raw --conf-file /usr/local/etc/vnci/udp2raw/{{.Port}}.conf
+
+[Install]
+WantedBy=multi-user.target

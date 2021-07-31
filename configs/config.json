@@ -2,24 +2,13 @@
     "1": {
         "localAddress": "0.0.0.0",
         "localPort": 12345,
-        "remoteAddress": "nps.futa.xyz",
+        "remoteAddress": "127.0.0.1",
         "remotePort": 44546,
         "rawMode": "faketcp",
         "cipherMode": "aes128cbc",
         "authMode": "md5",
-        "connectionType": "Client",
-        "status": "Active"
-    },
-    "12121": {
-        "localAddress": "0.0.0.0",
-        "localPort": 12121,
-        "remoteAddress": "33333",
-        "remotePort": 13333,
-        "rawMode": "faketcp",
-        "cipherMode": "aes128cbc",
-        "authMode": "md5",
-        "connectionType": "Client",
-        "status": "Active"
+        "connectionType": "Server",
+        "status": "Disable"
     },
     "2": {
         "localAddress": "0.0.0.0",
@@ -30,7 +19,7 @@
         "cipherMode": "aes128cbc",
         "authMode": "md5",
         "connectionType": "Client",
-        "status": "Active"
+        "status": "Disable"
     },
     "3": {
         "localAddress": "0.0.0.0",
@@ -42,16 +31,5 @@
         "authMode": "md5",
         "connectionType": "Client",
         "status": "Disable"
-    },
-    "33333": {
-        "localAddress": "0.0.0.0",
-        "localPort": 33333,
-        "remoteAddress": "33333",
-        "remotePort": 33333,
-        "rawMode": "faketcp",
-        "cipherMode": "aes128cbc",
-        "authMode": "md5",
-        "connectionType": "Client",
-        "status": "Active"
     }
 }
