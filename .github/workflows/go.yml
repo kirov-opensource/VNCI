@@ -19,4 +19,16 @@ jobs:
         go-version: 1.16
 
     - name: Build
-      run: go build -v ./main.go ./types.go
+    - run: |
+        curDataTime=$(date "+%Y%m%d%H%M%S")
+        go build -o ./dist main.go types.go
+        mkdir ./dist/configs
+        cp -r libraries/ ./dist/
+        zip -q -r vnci_$curDataTime.zip ./dist
+
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v2.2.4
+      with:
+        path: vnci_$curDataTime.zip
+        
+      
