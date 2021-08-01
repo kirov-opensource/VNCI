@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"text/template"
 
 	"github.com/miekg/dns"
@@ -268,7 +269,7 @@ func deleteTunnel() {
 	}
 }
 
-func createUDP2RAWConfig(conn ConnectionConfig) {
+func createUDP2RAWConfig(conn ConnectionConfig) (string, string) {
 	actualRemoteAddress := conn.RemoteAddress
 	if !checkIPAddress(actualRemoteAddress) {
 		actualRemoteAddress = getActualIP(actualRemoteAddress)
@@ -296,8 +297,9 @@ func createUDP2RAWConfig(conn ConnectionConfig) {
 	}
 
 	udp2rawConfTemplate, _ := template.New("test").Parse(string(readFile("./templates/udp2raw.config.template")))
-	filePath := "/usr/local/etc/vnci/udp2raw/" + strconv.Itoa(conn.LocalPort) + ".conf"
-	fileInfo, err := os.Create(filePath)
+	confFileName := strconv.Itoa(conn.LocalPort) + ".conf"
+	confFilePath := "/usr/local/etc/vnci/udp2raw/" + confFileName
+	fileInfo, err := os.Create(confFilePath)
 	if err != nil {
 		fmt.Println("创建文件出错:", err)
 	}
@@ -310,12 +312,15 @@ func createUDP2RAWConfig(conn ConnectionConfig) {
 	}
 
 	udp2rawServiceTemplate, _ := template.New("test").Parse(string(readFile("./templates/udp2raw.service.template")))
-	filePath = "./configs/udp2raw/vnci@udp2raw@" + strconv.Itoa(conn.LocalPort) + "@" + (&confRenderModel).ConnectionType + ".service"
-	fileInfo, err = os.Create(filePath)
+	serviceFileName := "vnci@udp2raw@" + strconv.Itoa(conn.LocalPort) + "@" + (&confRenderModel).ConnectionType + ".service"
+	serviceFilePath := "/etc/systemd/system/" + serviceFileName
+	fileInfo, err = os.Create(serviceFilePath)
 	if err != nil {
 		fmt.Println("创建文件出错:", err)
 	}
 	udp2rawServiceTemplate.Execute(fileInfo, serviceRenderModel)
+
+	return confFileName, serviceFileName
 }
 
 func getActualIP(address string) string {
@@ -372,7 +377,116 @@ func syncTunnel() {
 	}
 }
 
+func toggleTunnelStatus() {
+	listTunnel()
+
+	f := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("请输入编号[NO],输入exit退出>")
+		Input, _ := f.ReadString('\n')
+		Input = Input[:len(Input)-1]
+		if len(Input) == 0 {
+			continue
+		}
+		if Input == "exit" {
+			break
+		}
+		dataId, err := strconv.Atoi(Input)
+		if err != nil {
+			fmt.Println("输入正确的编号")
+		}
+		if data, ok := connections[dataId]; ok {
+			newStatus := toggleStatus(data)
+			data.Status = newStatus
+			connections[dataId] = data
+			if newStatus == StatusTypeActive {
+				fmt.Println("切换成功,已启用")
+			} else {
+				fmt.Println("切换成功,已停止")
+			}
+			break
+		}
+	}
+}
+
+func toggleStatus(conn ConnectionConfig) StatusType {
+	_, serviceFileName := createUDP2RAWConfig(conn)
+	serviceName := serviceFileName[0:strings.LastIndex(serviceFileName, ".")]
+
+	cmd := exec.Command("systemctl", "daemon-reload")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatalf("cmd.Run() failed with %s\n", err)
+	}
+	fmt.Printf("combined out:\n%s\n", string(out))
+
+	if conn.Status == StatusTypeActive {
+		cmd = exec.Command("systemctl", "stop", serviceName)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("cmd.Run() failed with %s\n", err)
+		}
+		fmt.Printf("combined out:\n%s\n", string(out))
+		return StatusTypeDisable
+	} else {
+		cmd = exec.Command("systemctl", "stop", serviceName)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("cmd.Run() failed with %s\n", err)
+		}
+		fmt.Printf("combined out:\n%s\n", string(out))
+		cmd = exec.Command("systemctl", "start", serviceName)
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			log.Fatalf("cmd.Run() failed with %s\n", err)
+		}
+		fmt.Printf("combined out:\n%s\n", string(out))
+		return StatusTypeActive
+	}
+}
+
+// Copy the src file to dst. Any existing file will be overwritten and will not
+// copy file attributes.
+func Copy(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+	return out.Close()
+}
+
+func deployUDP2Raw() {
+	os.MkdirAll("/usr/local/etc/vnci/udp2raw", 0777)
+	os.MkdirAll("/usr/local/bin/vnci", 0777)
+	// exec.Cmd
+	Copy("/usr/local/bin/vnci/udp2raw", "./libraries/udp2raw/udp2raw")
+
+	cmd := exec.Command("chmod", "+x", "/usr/local/bin/vnci/udp2raw")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatalf("cmd.Run() failed with %s\n", err)
+	}
+	fmt.Printf("combined out:\n%s\n", string(out))
+
+	// os.Chmod("/usr/local/bin/vnci/udp2raw", st.Mode()|)
+}
+
 func main() {
+
+	deployUDP2Raw()
+
 	// 把用户传递的命令行参数解析为对应变量的值
 	flag.Parse()
 
@@ -387,6 +501,7 @@ func main() {
 			fmt.Println("n(new):\t新增")
 			fmt.Println("d(delete):\t删除")
 			fmt.Println("s(sync):\t同步")
+			fmt.Println("t(toggle):\t切换状态")
 			fmt.Print("请输入一些字符串,输入e(exit)退出>")
 			Input, _ := f.ReadString('\n') //定义一行输入的内容分隔符。
 			Input = Input[:len(Input)-1]
@@ -405,6 +520,8 @@ func main() {
 				deleteTunnel()
 			case "s":
 				syncTunnel()
+			case "t":
+				toggleTunnelStatus()
 			}
 		}
 	}
