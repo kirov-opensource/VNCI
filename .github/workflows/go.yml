@@ -25,11 +25,11 @@ jobs:
         curDataTime=$(date "+%Y%m%d%H%M%S")
         go build -o ./dist main.go types.go
         cp -r libraries/ ./dist/
-        zip -q -r vnci_$curDataTime.zip ./dist
+        zip -q -r vnci.zip ./dist
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v2.2.4
       with:
-        path: find ./ -name '*.zip'
+        path: vnci.zip
         
       
