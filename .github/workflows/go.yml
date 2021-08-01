@@ -19,7 +19,7 @@ jobs:
         go-version: 1.16
 
     - name: Build
-    - run: |
+      run: |
         curDataTime=$(date "+%Y%m%d%H%M%S")
         go build -o ./dist main.go types.go
         mkdir ./dist/configs
