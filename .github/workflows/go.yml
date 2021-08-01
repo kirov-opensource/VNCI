@@ -22,14 +22,13 @@ jobs:
       run: |
         mkdir ./dist
         mkdir ./dist/configs
-        curDataTime=$(date "+%Y%m%d%H%M%S")
+        echo "{}" >> ./dist/configs/config.json
         go build -o ./dist main.go types.go
         cp -r libraries/ ./dist/
-        zip -q -r vnci.zip ./dist
 
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v2.2.4
       with:
-        path: vnci.zip
+        path: ./dist
         
       
