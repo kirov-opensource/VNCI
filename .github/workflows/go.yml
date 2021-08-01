@@ -20,10 +20,10 @@ jobs:
 
     - name: Build
       run: |
-        curDataTime=$(date "+%Y%m%d%H%M%S")
-        go build -o ./dist main.go types.go
         mkdir ./dist
         mkdir ./dist/configs
+        curDataTime=$(date "+%Y%m%d%H%M%S")
+        go build -o ./dist main.go types.go
         cp -r libraries/ ./dist/
         zip -q -r vnci_$curDataTime.zip ./dist
 
