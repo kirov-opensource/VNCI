@@ -237,10 +237,11 @@ func createTunnel() {
 	rawMode := getValueFromStdin("模拟方式", false, true, "faketcp", nil)
 	cipherMode := getValueFromStdin("加密方式", false, true, "aes128cbc", nil)
 	authMode := getValueFromStdin("认证方式", false, true, "md5", nil)
+	password := getValueFromStdin("密码", false, false, "", nil)
 
 	connections[localPort] = ConnectionConfig{localAddress,
 		localPort, remoteAddress, remotePort,
-		rawMode, cipherMode, authMode, actualType, StatusTypeActive}
+		rawMode, cipherMode, authMode, password, actualType, StatusTypeDisable}
 }
 
 func deleteTunnel() {
@@ -289,6 +290,7 @@ func createUDP2RAWConfig(conn ConnectionConfig) (string, string) {
 		RawMode:        conn.RawMode,
 		CipherMode:     conn.CipherMode,
 		AuthMode:       conn.AuthMode,
+		Password:       conn.Password,
 	}
 	if conn.ConnectionType == ConnectionTypeClient {
 		(&confRenderModel).ConnectionType = "c"

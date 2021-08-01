@@ -22,6 +22,7 @@ type ConnectionConfig struct {
 	RawMode        string         `json:"rawMode"`
 	CipherMode     string         `json:"cipherMode"`
 	AuthMode       string         `json:"authMode"`
+	Password       string         `json:"password"'`
 	ConnectionType ConnectionType `json:"connectionType"`
 	Status         StatusType     `json:"status"`
 }
