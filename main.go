@@ -2,184 +2,32 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"text/template"
-
-	"github.com/miekg/dns"
-	"github.com/olekukonko/tablewriter"
+	"vnci/utils"
+	// "github.com/google/logger"
 )
 
-var connections = make(map[int]ConnectionConfig)
+var templatePath string = "./templates"
+var serviceDestPath string = "/etc/systemd/system"
+var configDestPath string = "/usr/local/etc/vnci"
+var executionPath string = "/usr/local/bin/vnci"
+
+var connectionManager ConnectionManager
+
+// var connections = make(map[int]ConnectionItem)
 var configPath = "./configs/config.json"
 
 var runAs = *(flag.String("r", "t", "s:Service,t:Tools"))
 
-func RunCommand(name string, arg ...string) error {
-	cmd := exec.Command(name, arg...)
-	// 命令的错误输出和标准输出都连接到同一个管道
-	stdout, err := cmd.StdoutPipe()
-	cmd.Stderr = cmd.Stdout
-
-	if err != nil {
-		return err
-	}
-
-	if err = cmd.Start(); err != nil {
-		return err
-	}
-	// 从管道中实时获取输出并打印到终端
-	for {
-		tmp := make([]byte, 1024)
-		_, err := stdout.Read(tmp)
-		fmt.Print(string(tmp))
-		if err != nil {
-			break
-		}
-	}
-
-	if err = cmd.Wait(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// Exists reports whether the named file or directory exists.
-func Exists(name string) bool {
-	if _, err := os.Stat(name); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	return true
-}
-
-func saveConfig() {
-	fmt.Println("正在保存...")
-	text, err := json.MarshalIndent(connections, "", "    ")
-	if err != nil {
-		fmt.Println("保存失败(序列化):", err)
-
-	}
-	err = ioutil.WriteFile(configPath, text, 0777)
-	if err != nil {
-		fmt.Println("保存失败:", err)
-	} else {
-		fmt.Println("保存成功")
-	}
-}
-
-func initialConfig() {
-	fileExist := Exists(configPath)
-
-	if !fileExist {
-		fmt.Println("未找到配置文件，正在初始化...")
-		fileInfo, err := os.Create(configPath)
-
-		if err != nil {
-			fmt.Println("初始化失败:", err)
-		} else {
-			fileInfo.Write([]byte("{}"))
-			fmt.Println("初始化成功")
-		}
-		fileInfo.Close()
-	}
-}
-
-func readFile(path string) []byte {
-
-	fileInfo, err := os.OpenFile(path, os.O_RDONLY, 0600)
-
-	if err != nil {
-		fmt.Println("加载配置失败(打开配置文件):", err)
-	}
-
-	data, err := io.ReadAll(fileInfo)
-
-	if err != nil {
-		fmt.Println("加载配置失败(读取配置文件):", err)
-	}
-	return data
-}
-
-func loadConfig() {
-
-	fmt.Println("正在加载配置...")
-
-	initialConfig()
-
-	data := readFile(configPath)
-
-	err := json.Unmarshal(data, &connections)
-
-	if err != nil {
-		fmt.Println("加载配置失败(反序列化):", err)
-	} else {
-		fmt.Println("加载配置成功")
-	}
-}
-
-func listTunnel() {
-	tunnelSize := len(connections)
-
-	if tunnelSize == 0 {
-		fmt.Println("暂无数据")
-		return
-	}
-
-	activeColor := tablewriter.Colors{tablewriter.FgGreenColor, tablewriter.Bold}
-	disableColor := tablewriter.Colors{tablewriter.FgRedColor, tablewriter.Bold}
-
-	inColor := tablewriter.Colors{tablewriter.FgGreenColor, tablewriter.Bold}
-	outColor := tablewriter.Colors{tablewriter.FgRedColor, tablewriter.Bold}
-
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"No", "Local", "Remote", "Type", "Status"})
-
-	// table.SetColumnColor(tablewriter.Colors{},
-	// 	tablewriter.Colors{},
-	// 	tablewriter.Colors{},
-	// 	tablewriter.Colors{},
-	// 	tablewriter.Colors{})
-
-	for key, tunnel := range connections {
-
-		rowData := []string{
-			strconv.Itoa(key), tunnel.LocalAddress + ":" + strconv.Itoa(tunnel.LocalPort), tunnel.RemoteAddress + ":" + strconv.Itoa(tunnel.RemotePort), string(tunnel.ConnectionType), string(tunnel.Status),
-		}
-		typeColor := inColor
-		if tunnel.ConnectionType == ConnectionTypeServer {
-			typeColor = outColor
-		}
-
-		statusColor := activeColor
-		if tunnel.Status == StatusTypeDisable {
-			statusColor = disableColor
-		}
-
-		table.Rich(rowData, []tablewriter.Colors{{}, {}, {}, {}, typeColor, statusColor})
-	}
-	table.Render()
-}
-
-func checkIPAddress(ip string) bool {
-	if net.ParseIP(ip) == nil {
-		return false
-	} else {
-		return true
-	}
-}
-
-func getValueFromStdin(parameterName string, optional bool, hasDefaultValue bool, defaultValue string, validFunc func(string) bool) string {
+func GetValueFromStdin(parameterName string, optional bool, hasDefaultValue bool, defaultValue string, validFunc func(string) bool) string {
 	f := bufio.NewReader(os.Stdin)
 	var result string
 	promptText := "请输入" + parameterName
@@ -221,31 +69,31 @@ func getValueFromStdin(parameterName string, optional bool, hasDefaultValue bool
 	return result
 }
 
-func createTunnel() {
+func CreateTunnel() {
 	var actualType ConnectionType
-	tunnelType := getValueFromStdin("通道类型(Server/Client)", false, true, "Client", nil)
+	tunnelType := GetValueFromStdin("通道类型(Server/Client)", false, true, "Client", nil)
 	if tunnelType == string(ConnectionTypeClient) {
 		actualType = ConnectionTypeClient
 	} else {
 		actualType = ConnectionTypeServer
 	}
-	localAddress := getValueFromStdin("本地监听地址", false, true, "0.0.0.0", checkIPAddress)
-	localPort, _ := strconv.Atoi(getValueFromStdin("本地端口", false, false, "", nil))
-	remoteAddress := getValueFromStdin("远端地址", false, false, "", nil)
-	remotePort, _ := strconv.Atoi(getValueFromStdin("远端端口", false, false, "", nil))
+	localAddress := GetValueFromStdin("本地监听地址", false, true, "0.0.0.0", utils.CheckIPAddress)
+	localPort, _ := strconv.Atoi(GetValueFromStdin("本地端口", false, false, "", nil))
+	remoteAddress := GetValueFromStdin("远端地址", false, false, "", nil)
+	remotePort, _ := strconv.Atoi(GetValueFromStdin("远端端口", false, false, "", nil))
 
-	rawMode := getValueFromStdin("模拟方式", false, true, "faketcp", nil)
-	cipherMode := getValueFromStdin("加密方式", false, true, "aes128cbc", nil)
-	authMode := getValueFromStdin("认证方式", false, true, "md5", nil)
-	password := getValueFromStdin("密码", false, false, "", nil)
+	rawMode := GetValueFromStdin("模拟方式", false, true, "faketcp", nil)
+	cipherMode := GetValueFromStdin("加密方式", false, true, "aes128cbc", nil)
+	authMode := GetValueFromStdin("认证方式", false, true, "md5", nil)
+	password := GetValueFromStdin("密码", false, false, "", nil)
 
-	connections[localPort] = ConnectionConfig{localAddress,
+	connectionManager.Add(ConnectionItem{localAddress,
 		localPort, remoteAddress, remotePort,
-		rawMode, cipherMode, authMode, password, actualType, StatusTypeDisable}
+		rawMode, cipherMode, authMode, password, actualType, StatusTypeDisable})
 }
 
-func deleteTunnel() {
-	listTunnel()
+func DeleteTunnel() {
+	connectionManager.List()
 
 	f := bufio.NewReader(os.Stdin)
 	for {
@@ -262,18 +110,18 @@ func deleteTunnel() {
 		if err != nil {
 			fmt.Println("输入正确的编号")
 		}
-		if _, ok := connections[dataId]; ok {
-			delete(connections, dataId)
+		if connectionManager.ContainsKey(dataId) {
+			connectionManager.Remove(dataId)
 			fmt.Println("删除成功")
 			break
 		}
 	}
 }
 
-func createUDP2RAWConfig(conn ConnectionConfig) (string, string) {
+func CreateUDP2RAWConfig(conn ConnectionItem) (string, string) {
 	actualRemoteAddress := conn.RemoteAddress
-	if !checkIPAddress(actualRemoteAddress) {
-		actualRemoteAddress = getActualIP(actualRemoteAddress)
+	if !utils.CheckIPAddress(actualRemoteAddress) {
+		actualRemoteAddress = utils.GetActualIP(actualRemoteAddress)
 	}
 	confRenderModel := struct {
 		ConnectionType string
@@ -298,9 +146,9 @@ func createUDP2RAWConfig(conn ConnectionConfig) (string, string) {
 		(&confRenderModel).ConnectionType = "s"
 	}
 
-	udp2rawConfTemplate, _ := template.New("test").Parse(string(readFile("./templates/udp2raw.config.template")))
+	udp2rawConfTemplate, _ := template.New("test").Parse(string(utils.ReadFile(templatePath + "/udp2raw.config.template")))
 	confFileName := strconv.Itoa(conn.LocalPort) + ".conf"
-	confFilePath := "/usr/local/etc/vnci/udp2raw/" + confFileName
+	confFilePath := configDestPath + "/udp2raw/" + confFileName
 	fileInfo, err := os.Create(confFilePath)
 	if err != nil {
 		fmt.Println("创建文件出错:", err)
@@ -313,9 +161,9 @@ func createUDP2RAWConfig(conn ConnectionConfig) (string, string) {
 		Port: strconv.Itoa(conn.LocalPort),
 	}
 
-	udp2rawServiceTemplate, _ := template.New("test").Parse(string(readFile("./templates/udp2raw.service.template")))
+	udp2rawServiceTemplate, _ := template.New("test").Parse(string(utils.ReadFile(templatePath + "/udp2raw.service.template")))
 	serviceFileName := "vnci@udp2raw@" + strconv.Itoa(conn.LocalPort) + "@" + (&confRenderModel).ConnectionType + ".service"
-	serviceFilePath := "/etc/systemd/system/" + serviceFileName
+	serviceFilePath := serviceDestPath + serviceFileName
 	fileInfo, err = os.Create(serviceFilePath)
 	if err != nil {
 		fmt.Println("创建文件出错:", err)
@@ -325,36 +173,8 @@ func createUDP2RAWConfig(conn ConnectionConfig) (string, string) {
 	return confFileName, serviceFileName
 }
 
-func getActualIP(address string) string {
-	config, _ := dns.ClientConfigFromFile("/etc/resolv.conf")
-	c := new(dns.Client)
-	m := new(dns.Msg)
-	m.SetQuestion(dns.Fqdn(address), dns.TypeA)
-	m.RecursionDesired = true
-	// client 发起 DNS 请求，其中 c 为上文创建的 client，m 为构造的 DNS 报文
-	// config 为从 /etc/resolv.conf 构造出来的配置
-	r, _, err := c.Exchange(m, net.JoinHostPort(config.Servers[0], config.Port))
-	if r == nil {
-		log.Fatalf("*** error: %s\n", err.Error())
-	}
-
-	if r.Rcode != dns.RcodeSuccess {
-		return "1.1.1.1"
-		log.Fatalf("*** invalid answer name %s after MX query for %s\n", os.Args[1], os.Args[1])
-	}
-
-	// 如果 DNS 查询成功
-	for _, a := range r.Answer {
-		if dnsA, ok := a.(*dns.A); ok {
-			return dnsA.A.String()
-		}
-		// fmt.Printf("%v\n", a)
-	}
-	return "1.1.1.1"
-}
-
-func syncTunnel() {
-	listTunnel()
+func SyncTunnel() {
+	connectionManager.List()
 
 	f := bufio.NewReader(os.Stdin)
 	for {
@@ -371,16 +191,17 @@ func syncTunnel() {
 		if err != nil {
 			fmt.Println("输入正确的编号")
 		}
-		if _, ok := connections[dataId]; ok {
-			createUDP2RAWConfig(connections[dataId])
+		if connectionManager.ContainsKey(dataId) {
+			data, _ := connectionManager.Get(dataId)
+			CreateUDP2RAWConfig(*data)
 			fmt.Println("同步成功")
 			break
 		}
 	}
 }
 
-func toggleTunnelStatus() {
-	listTunnel()
+func ToggleTunnelStatus() {
+	connectionManager.List()
 
 	f := bufio.NewReader(os.Stdin)
 	for {
@@ -397,10 +218,10 @@ func toggleTunnelStatus() {
 		if err != nil {
 			fmt.Println("输入正确的编号")
 		}
-		if data, ok := connections[dataId]; ok {
-			newStatus := toggleStatus(data)
+		if connectionManager.ContainsKey(dataId) {
+			data, _ := connectionManager.Get(dataId)
+			newStatus := ToggleStatus(*data)
 			data.Status = newStatus
-			connections[dataId] = data
 			if newStatus == StatusTypeActive {
 				fmt.Println("切换成功,已启用")
 			} else {
@@ -411,8 +232,8 @@ func toggleTunnelStatus() {
 	}
 }
 
-func toggleStatus(conn ConnectionConfig) StatusType {
-	_, serviceFileName := createUDP2RAWConfig(conn)
+func ToggleStatus(conn ConnectionItem) StatusType {
+	_, serviceFileName := CreateUDP2RAWConfig(conn)
 	serviceName := serviceFileName[0:strings.LastIndex(serviceFileName, ".")]
 
 	cmd := exec.Command("systemctl", "daemon-reload")
@@ -486,13 +307,15 @@ func deployUDP2Raw() {
 }
 
 func main() {
+	// connectionManager = ConnectionManager{}
+	connectionManager.Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath)
 
-	deployUDP2Raw()
+	// deployUDP2Raw()
 
 	// 把用户传递的命令行参数解析为对应变量的值
 	flag.Parse()
 
-	loadConfig()
+	// loadConfig()
 
 	// createUDP2RAWConfig(connections[1])
 
@@ -515,20 +338,21 @@ func main() {
 			}
 			switch Input {
 			case "l":
-				listTunnel()
+				connectionManager.List()
 			case "n":
-				createTunnel()
+				CreateTunnel()
 			case "d":
-				deleteTunnel()
+				DeleteTunnel()
 			case "s":
-				syncTunnel()
+				SyncTunnel()
 			case "t":
-				toggleTunnelStatus()
+				ToggleTunnelStatus()
 			}
 		}
 	}
 
 	fmt.Println("正在退出...")
-	saveConfig()
+	connectionManager.SaveConfig()
+	// saveConfig()
 	os.Exit(0)
 }
