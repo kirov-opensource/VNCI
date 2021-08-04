@@ -9,8 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
-	"text/template"
 	"vnci/utils"
 	// "github.com/google/logger"
 )
@@ -118,88 +116,6 @@ func DeleteTunnel() {
 	}
 }
 
-func CreateUDP2RAWConfig(conn ConnectionItem) (string, string) {
-	actualRemoteAddress := conn.RemoteAddress
-	if !utils.CheckIPAddress(actualRemoteAddress) {
-		actualRemoteAddress = utils.GetActualIP(actualRemoteAddress)
-	}
-	confRenderModel := struct {
-		ConnectionType string
-		Local          string
-		Remote         string
-		Password       string
-		RawMode        string
-		CipherMode     string
-		AuthMode       string
-	}{
-		ConnectionType: "",
-		Local:          conn.LocalAddress + ":" + strconv.Itoa(conn.LocalPort),
-		Remote:         actualRemoteAddress + ":" + strconv.Itoa(conn.RemotePort),
-		RawMode:        conn.RawMode,
-		CipherMode:     conn.CipherMode,
-		AuthMode:       conn.AuthMode,
-		Password:       conn.Password,
-	}
-	if conn.ConnectionType == ConnectionTypeClient {
-		(&confRenderModel).ConnectionType = "c"
-	} else {
-		(&confRenderModel).ConnectionType = "s"
-	}
-
-	udp2rawConfTemplate, _ := template.New("test").Parse(string(utils.ReadFile(templatePath + "/udp2raw.config.template")))
-	confFileName := strconv.Itoa(conn.LocalPort) + ".conf"
-	confFilePath := configDestPath + "/udp2raw/" + confFileName
-	fileInfo, err := os.Create(confFilePath)
-	if err != nil {
-		fmt.Println("创建文件出错:", err)
-	}
-	udp2rawConfTemplate.Execute(fileInfo, confRenderModel)
-
-	serviceRenderModel := struct {
-		Port string
-	}{
-		Port: strconv.Itoa(conn.LocalPort),
-	}
-
-	udp2rawServiceTemplate, _ := template.New("test").Parse(string(utils.ReadFile(templatePath + "/udp2raw.service.template")))
-	serviceFileName := "vnci@udp2raw@" + strconv.Itoa(conn.LocalPort) + "@" + (&confRenderModel).ConnectionType + ".service"
-	serviceFilePath := serviceDestPath + serviceFileName
-	fileInfo, err = os.Create(serviceFilePath)
-	if err != nil {
-		fmt.Println("创建文件出错:", err)
-	}
-	udp2rawServiceTemplate.Execute(fileInfo, serviceRenderModel)
-
-	return confFileName, serviceFileName
-}
-
-func SyncTunnel() {
-	connectionManager.List()
-
-	f := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print("请输入编号[NO],输入exit退出>")
-		Input, _ := f.ReadString('\n')
-		Input = Input[:len(Input)-1]
-		if len(Input) == 0 {
-			continue
-		}
-		if Input == "exit" {
-			break
-		}
-		dataId, err := strconv.Atoi(Input)
-		if err != nil {
-			fmt.Println("输入正确的编号")
-		}
-		if connectionManager.ContainsKey(dataId) {
-			data, _ := connectionManager.Get(dataId)
-			CreateUDP2RAWConfig(*data)
-			fmt.Println("同步成功")
-			break
-		}
-	}
-}
-
 func ToggleTunnelStatus() {
 	connectionManager.List()
 
@@ -220,7 +136,7 @@ func ToggleTunnelStatus() {
 		}
 		if connectionManager.ContainsKey(dataId) {
 			data, _ := connectionManager.Get(dataId)
-			newStatus := ToggleStatus(*data)
+			newStatus := connectionManager.ToggleStatus(*data)
 			data.Status = newStatus
 			if newStatus == StatusTypeActive {
 				fmt.Println("切换成功,已启用")
@@ -229,42 +145,6 @@ func ToggleTunnelStatus() {
 			}
 			break
 		}
-	}
-}
-
-func ToggleStatus(conn ConnectionItem) StatusType {
-	_, serviceFileName := CreateUDP2RAWConfig(conn)
-	serviceName := serviceFileName[0:strings.LastIndex(serviceFileName, ".")]
-
-	cmd := exec.Command("systemctl", "daemon-reload")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Fatalf("cmd.Run() failed with %s\n", err)
-	}
-	fmt.Printf("combined out:\n%s\n", string(out))
-
-	if conn.Status == StatusTypeActive {
-		cmd = exec.Command("systemctl", "stop", serviceName)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Fatalf("cmd.Run() failed with %s\n", err)
-		}
-		fmt.Printf("combined out:\n%s\n", string(out))
-		return StatusTypeDisable
-	} else {
-		cmd = exec.Command("systemctl", "stop", serviceName)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Fatalf("cmd.Run() failed with %s\n", err)
-		}
-		fmt.Printf("combined out:\n%s\n", string(out))
-		cmd = exec.Command("systemctl", "start", serviceName)
-		out, err = cmd.CombinedOutput()
-		if err != nil {
-			log.Fatalf("cmd.Run() failed with %s\n", err)
-		}
-		fmt.Printf("combined out:\n%s\n", string(out))
-		return StatusTypeActive
 	}
 }
 
@@ -343,8 +223,6 @@ func main() {
 				CreateTunnel()
 			case "d":
 				DeleteTunnel()
-			case "s":
-				SyncTunnel()
 			case "t":
 				ToggleTunnelStatus()
 			}

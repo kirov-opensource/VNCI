@@ -23,7 +23,7 @@ jobs:
         mkdir ./dist
         mkdir ./dist/configs
         echo "{}" >> ./dist/configs/config.json
-        go build -o ./dist main.go types.go
+        go build -o ./dist main.go types.go connection.go
         cp -r libraries/ ./dist/
 
     - name: Upload a Build Artifact

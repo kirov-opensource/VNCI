@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
+	"text/template"
 	"vnci/utils"
 
 	"github.com/google/logger"
@@ -55,6 +58,12 @@ type IConnectionManager interface {
 
 	//获取
 	Get(key int) (*ConnectionItem, error)
+
+	//同步物理文件
+	SyncPhysicalFiles(item ConnectionItem) (string, string)
+
+	//切换状态
+	ToggleStatus(conn ConnectionItem) StatusType
 }
 
 type ConnectionManager struct {
@@ -72,8 +81,104 @@ func (_self *ConnectionManager) Get(key int) (*ConnectionItem, error) {
 	}
 	return nil, errors.New("Not found")
 }
-func (_self *ConnectionManager) Add(item ConnectionItem) {
 
+func (_self *ConnectionManager) ToggleStatus(conn ConnectionItem) StatusType {
+	_, serviceFileName := connectionManager.SyncPhysicalFiles(conn)
+	serviceName := serviceFileName[0:strings.LastIndex(serviceFileName, ".")]
+
+	cmd := exec.Command("systemctl", "daemon-reload")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Fatalln("cmd.Run() failed with %s\n", err)
+	}
+	logger.Infoln("combined out:\n%s\n", string(out))
+
+	if conn.Status == StatusTypeActive {
+		cmd = exec.Command("systemctl", "stop", serviceName)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			logger.Fatalln("cmd.Run() failed with %s\n", err)
+		}
+		logger.Infoln("combined out:\n%s\n", string(out))
+		return StatusTypeDisable
+	} else {
+		cmd = exec.Command("systemctl", "stop", serviceName)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			logger.Fatalln("cmd.Run() failed with %s\n", err)
+		}
+		logger.Infoln("combined out:\n%s\n", string(out))
+		cmd = exec.Command("systemctl", "start", serviceName)
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			logger.Fatalln("cmd.Run() failed with %s\n", err)
+		}
+		logger.Infoln("combined out:\n%s\n", string(out))
+		return StatusTypeActive
+	}
+}
+
+func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, string) {
+	actualRemoteAddress := conn.RemoteAddress
+	if !utils.CheckIPAddress(actualRemoteAddress) {
+		actualRemoteAddress = utils.GetActualIP(actualRemoteAddress)
+	}
+	confRenderModel := struct {
+		ConnectionType string
+		Local          string
+		Remote         string
+		Password       string
+		RawMode        string
+		CipherMode     string
+		AuthMode       string
+	}{
+		ConnectionType: "",
+		Local:          conn.LocalAddress + ":" + strconv.Itoa(conn.LocalPort),
+		Remote:         actualRemoteAddress + ":" + strconv.Itoa(conn.RemotePort),
+		RawMode:        conn.RawMode,
+		CipherMode:     conn.CipherMode,
+		AuthMode:       conn.AuthMode,
+		Password:       conn.Password,
+	}
+	if conn.ConnectionType == ConnectionTypeClient {
+		(&confRenderModel).ConnectionType = "c"
+	} else {
+		(&confRenderModel).ConnectionType = "s"
+	}
+
+	udp2rawConfTemplate, _ := template.New("test").Parse(string(utils.ReadFile(_self.TemplatePath + "/udp2raw.config.template")))
+	confFileName := strconv.Itoa(conn.LocalPort) + ".conf"
+	confFilePath := _self.ConfigDestPath + "/udp2raw/" + confFileName
+	fileInfo, err := os.Create(confFilePath)
+	if err != nil {
+		fmt.Println("创建文件出错:", err)
+	}
+	udp2rawConfTemplate.Execute(fileInfo, confRenderModel)
+
+	serviceRenderModel := struct {
+		Port string
+	}{
+		Port: strconv.Itoa(conn.LocalPort),
+	}
+
+	udp2rawServiceTemplate, _ := template.New("test").Parse(string(utils.ReadFile(_self.TemplatePath + "/udp2raw.service.template")))
+	serviceFileName := "vnci@udp2raw@" + strconv.Itoa(conn.LocalPort) + "@" + (&confRenderModel).ConnectionType + ".service"
+	serviceFilePath := _self.ServiceDestPath + serviceFileName
+	fileInfo, err = os.Create(serviceFilePath)
+	if err != nil {
+		fmt.Println("创建文件出错:", err)
+	}
+	udp2rawServiceTemplate.Execute(fileInfo, serviceRenderModel)
+
+	return confFileName, serviceFileName
+}
+
+func (_self *ConnectionManager) Add(item ConnectionItem) {
+	if !_self.ContainsKey(item.LocalPort) {
+		_self.data[item.LocalPort] = item
+	} else {
+		logger.Errorln("本地端口已被占用")
+	}
 }
 
 func (_self *ConnectionManager) List() {
