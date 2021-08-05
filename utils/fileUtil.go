@@ -7,7 +7,7 @@ import (
 	"github.com/google/logger"
 )
 
-//读取文件
+// 读取文件
 func ReadFile(path string) []byte {
 	fileInfo, err := os.OpenFile(path, os.O_RDONLY, 0600)
 
@@ -24,7 +24,7 @@ func ReadFile(path string) []byte {
 	return data
 }
 
-//检测文件是否存在
+// 检测文件是否存在
 func Exists(name string) bool {
 	if _, err := os.Stat(name); err != nil {
 		if os.IsNotExist(err) {
@@ -34,7 +34,7 @@ func Exists(name string) bool {
 	return true
 }
 
-//创建文件
+// 创建文件
 func CreateFile(dstPath string, content []byte) error {
 	fileInfo, err := os.Create(dstPath)
 

@@ -31,38 +31,35 @@ const (
 	ConnectionTypeServer ConnectionType = "Server"
 )
 
-// var templatePath string = "./templates"
-// var serviceDestPath string = "/etc/systemd/system"
-// var configDestPath string = "/usr/local/etc/vnci"
-// var executionPath string = "/usr/local/bin/vnci"
-
 type IConnectionManager interface {
+	// 初始化
 	Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath string)
-	//加载数据
+
+	// 加载数据
 	LoadData() (map[int]ConnectionItem, error)
 
-	//打印列表
+	// 打印列表
 	List()
 
-	//保存数据
+	// 保存数据
 	SaveConfig() error
 
-	//添加链接
+	// 添加链接
 	Add(item ConnectionItem) error
 
-	//删除链接
+	// 删除链接
 	Remove(key int) bool
 
-	//是否存在
+	// 是否存在
 	ContainsKey(key int) bool
 
-	//获取
+	// 获取
 	Get(key int) (*ConnectionItem, error)
 
-	//同步物理文件
+	// 同步物理文件
 	SyncPhysicalFiles(item ConnectionItem) (string, string)
 
-	//切换状态
+	// 切换状态
 	ToggleStatus(conn ConnectionItem) StatusType
 }
 
@@ -74,12 +71,110 @@ type ConnectionManager struct {
 	ConfigPath, TemplatePath, ServiceDestPath, ConfigDestPath, ExecutionPath, LocalLibraryPath string
 }
 
+func (_self *ConnectionManager) Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath string) {
+	_self.TemplatePath = templatePath
+	_self.ServiceDestPath = serviceDestPath
+	_self.ConfigDestPath = configDestPath
+	_self.ExecutionPath = executionPath
+	_self.ConfigPath = configPath
+	_self.LocalLibraryPath = localLibraryPath
+
+	_self.data = make(map[int]ConnectionItem)
+	_self.mu = sync.Mutex{}
+
+	os.MkdirAll(_self.ConfigDestPath+"/udp2raw", 0777)
+	os.MkdirAll(_self.ExecutionPath, 0777)
+	utils.Copy(_self.LocalLibraryPath+"/udp2raw/udp2raw", _self.ExecutionPath+"/udp2raw")
+
+	cmd := exec.Command("chmod", "+x", "/usr/local/bin/vnci/udp2raw")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Errorln("cmd.Run() failed with %s\n", err)
+	}
+	logger.Infoln("combined out:\n%s\n", string(out))
+
+	fileExist := utils.Exists(configPath)
+
+	if !fileExist {
+		logger.Infoln("未找到配置文件，正在初始化...")
+		err := utils.CreateFile(configPath, []byte("{}"))
+		if err != nil {
+			logger.Fatalln("初始化失败,请检查日志文件", err)
+		}
+	}
+
+	_self.LoadConfig()
+}
+
 func (_self *ConnectionManager) Get(key int) (*ConnectionItem, error) {
 	if _self.ContainsKey(key) {
 		var data = _self.data[key]
 		return &data, nil
 	}
 	return nil, errors.New("not found")
+}
+
+func (_self *ConnectionManager) List() {
+	tunnelSize := len(_self.data)
+
+	if tunnelSize == 0 {
+		fmt.Println("暂无数据")
+		return
+	}
+
+	activeColor := tablewriter.Colors{tablewriter.FgGreenColor, tablewriter.Bold}
+	disableColor := tablewriter.Colors{tablewriter.FgRedColor, tablewriter.Bold}
+
+	inColor := tablewriter.Colors{tablewriter.FgGreenColor, tablewriter.Bold}
+	outColor := tablewriter.Colors{tablewriter.FgRedColor, tablewriter.Bold}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"No", "Local", "Remote", "Type", "Status"})
+
+	for key, tunnel := range _self.data {
+
+		rowData := []string{
+			strconv.Itoa(key), tunnel.LocalAddress + ":" + strconv.Itoa(tunnel.LocalPort), tunnel.RemoteAddress + ":" + strconv.Itoa(tunnel.RemotePort), string(tunnel.ConnectionType), string(tunnel.Status),
+		}
+		typeColor := inColor
+		if tunnel.ConnectionType == ConnectionTypeServer {
+			typeColor = outColor
+		}
+
+		statusColor := activeColor
+		if tunnel.Status == StatusTypeDisable {
+			statusColor = disableColor
+		}
+
+		table.Rich(rowData, []tablewriter.Colors{{}, {}, {}, {}, typeColor, statusColor})
+	}
+	table.Render()
+}
+
+func (_self *ConnectionManager) ContainsKey(key int) bool {
+	if _, ok := _self.data[key]; ok {
+		return true
+	} else {
+		return false
+	}
+}
+
+func (_self *ConnectionManager) Add(item ConnectionItem) {
+	if !_self.ContainsKey(item.LocalPort) {
+		_self.data[item.LocalPort] = item
+	} else {
+		logger.Errorln("本地端口已被占用")
+	}
+}
+
+func (_self *ConnectionManager) Remove(key int) bool {
+	if _self.ContainsKey(key) {
+		delete(_self.data, key)
+		logger.Infoln("删除成功")
+		return true
+	} else {
+		return false
+	}
 }
 
 func (_self *ConnectionManager) ToggleStatus(conn ConnectionItem) StatusType {
@@ -173,81 +268,9 @@ func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, 
 	return confFileName, serviceFileName
 }
 
-func (_self *ConnectionManager) Add(item ConnectionItem) {
-	if !_self.ContainsKey(item.LocalPort) {
-		_self.data[item.LocalPort] = item
-	} else {
-		logger.Errorln("本地端口已被占用")
-	}
-}
-
-func (_self *ConnectionManager) List() {
-	tunnelSize := len(_self.data)
-
-	if tunnelSize == 0 {
-		fmt.Println("暂无数据")
-		return
-	}
-
-	activeColor := tablewriter.Colors{tablewriter.FgGreenColor, tablewriter.Bold}
-	disableColor := tablewriter.Colors{tablewriter.FgRedColor, tablewriter.Bold}
-
-	inColor := tablewriter.Colors{tablewriter.FgGreenColor, tablewriter.Bold}
-	outColor := tablewriter.Colors{tablewriter.FgRedColor, tablewriter.Bold}
-
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"No", "Local", "Remote", "Type", "Status"})
-
-	for key, tunnel := range _self.data {
-
-		rowData := []string{
-			strconv.Itoa(key), tunnel.LocalAddress + ":" + strconv.Itoa(tunnel.LocalPort), tunnel.RemoteAddress + ":" + strconv.Itoa(tunnel.RemotePort), string(tunnel.ConnectionType), string(tunnel.Status),
-		}
-		typeColor := inColor
-		if tunnel.ConnectionType == ConnectionTypeServer {
-			typeColor = outColor
-		}
-
-		statusColor := activeColor
-		if tunnel.Status == StatusTypeDisable {
-			statusColor = disableColor
-		}
-
-		table.Rich(rowData, []tablewriter.Colors{{}, {}, {}, {}, typeColor, statusColor})
-	}
-	table.Render()
-}
-
-func (_self *ConnectionManager) Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath string) {
-	_self.TemplatePath = templatePath
-	_self.ServiceDestPath = serviceDestPath
-	_self.ConfigDestPath = configDestPath
-	_self.ExecutionPath = executionPath
-	_self.ConfigPath = configPath
-	_self.LocalLibraryPath = localLibraryPath
-
-	_self.data = make(map[int]ConnectionItem)
-	_self.mu = sync.Mutex{}
-
-	os.MkdirAll(_self.ConfigDestPath+"/udp2raw", 0777)
-	os.MkdirAll(_self.ExecutionPath, 0777)
-	utils.Copy(_self.LocalLibraryPath+"/udp2raw/udp2raw", _self.ExecutionPath+"/udp2raw")
-
-	cmd := exec.Command("chmod", "+x", "/usr/local/bin/vnci/udp2raw")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		logger.Errorln("cmd.Run() failed with %s\n", err)
-	}
-	logger.Infoln("combined out:\n%s\n", string(out))
-
-	_self.LoadConfig()
-}
-
 func (_self *ConnectionManager) LoadConfig() (map[int]ConnectionItem, error) {
 
 	logger.Infoln("正在加载配置...")
-
-	initialConfig()
 
 	data := utils.ReadFile(_self.ConfigPath)
 
@@ -279,26 +302,6 @@ func (_self *ConnectionManager) SaveConfig() error {
 	return nil
 }
 
-func (_self *ConnectionManager) ContainsKey(key int) bool {
-	if _, ok := _self.data[key]; ok {
-		return true
-	} else {
-		return false
-	}
-}
-
-func (_self *ConnectionManager) Remove(key int) bool {
-
-	if _self.ContainsKey(key) {
-		delete(_self.data, key)
-		logger.Infoln("删除成功")
-		return true
-	} else {
-		return false
-	}
-
-}
-
 type ConnectionItem struct {
 	LocalAddress   string         `json:"localAddress"`
 	LocalPort      int            `json:"localPort"`
@@ -310,16 +313,4 @@ type ConnectionItem struct {
 	Password       string         `json:"password"`
 	ConnectionType ConnectionType `json:"connectionType"`
 	Status         StatusType     `json:"status"`
-}
-
-func initialConfig() {
-	fileExist := utils.Exists(configPath)
-
-	if !fileExist {
-		logger.Infoln("未找到配置文件，正在初始化...")
-		err := utils.CreateFile(configPath, []byte("{}"))
-		if err != nil {
-			logger.Fatalln("初始化失败,请检查日志文件", err)
-		}
-	}
 }

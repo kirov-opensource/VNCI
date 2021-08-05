@@ -7,6 +7,7 @@ import (
 	"github.com/miekg/dns"
 )
 
+// 获取实际IP
 func GetActualIP(address string) string {
 	config, _ := dns.ClientConfigFromFile("/etc/resolv.conf")
 	c := new(dns.Client)
@@ -34,6 +35,8 @@ func GetActualIP(address string) string {
 	}
 	return "1.1.1.1"
 }
+
+// 检测是否是IP
 func CheckIPAddress(ip string) bool {
 	if net.ParseIP(ip) == nil {
 		return false

@@ -183,7 +183,8 @@ func main() {
 	}
 
 	fmt.Println("正在退出...")
+
 	connectionManager.SaveConfig()
-	// saveConfig()
+
 	os.Exit(0)
 }
