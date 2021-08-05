@@ -34,6 +34,7 @@ func Exists(name string) bool {
 	return true
 }
 
+//创建文件
 func CreateFile(dstPath string, content []byte) error {
 	fileInfo, err := os.Create(dstPath)
 
@@ -46,4 +47,25 @@ func CreateFile(dstPath string, content []byte) error {
 	fileInfo.Close()
 	logger.Info("创建文件成功")
 	return nil
+}
+
+// 复制文件
+func Copy(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+	return out.Close()
 }

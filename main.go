@@ -4,10 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"io"
-	"log"
 	"os"
-	"os/exec"
 	"strconv"
 	"vnci/utils"
 	// "github.com/google/logger"
@@ -17,6 +14,7 @@ var templatePath string = "./templates"
 var serviceDestPath string = "/etc/systemd/system"
 var configDestPath string = "/usr/local/etc/vnci"
 var executionPath string = "/usr/local/bin/vnci"
+var localLibraryPath string = "./library"
 
 var connectionManager ConnectionManager
 
@@ -148,56 +146,11 @@ func ToggleTunnelStatus() {
 	}
 }
 
-// Copy the src file to dst. Any existing file will be overwritten and will not
-// copy file attributes.
-func Copy(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
-	}
-	return out.Close()
-}
-
-func deployUDP2Raw() {
-	os.MkdirAll("/usr/local/etc/vnci/udp2raw", 0777)
-	os.MkdirAll("/usr/local/bin/vnci", 0777)
-	// exec.Cmd
-	Copy("/usr/local/bin/vnci/udp2raw", "./libraries/udp2raw/udp2raw")
-
-	cmd := exec.Command("chmod", "+x", "/usr/local/bin/vnci/udp2raw")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Fatalf("cmd.Run() failed with %s\n", err)
-	}
-	fmt.Printf("combined out:\n%s\n", string(out))
-
-	// os.Chmod("/usr/local/bin/vnci/udp2raw", st.Mode()|)
-}
-
 func main() {
-	// connectionManager = ConnectionManager{}
-	connectionManager.Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath)
-
-	// deployUDP2Raw()
+	connectionManager.Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath)
 
 	// 把用户传递的命令行参数解析为对应变量的值
 	flag.Parse()
-
-	// loadConfig()
-
-	// createUDP2RAWConfig(connections[1])
 
 	if runAs == "t" {
 		f := bufio.NewReader(os.Stdin) //读取输入的内容

@@ -37,7 +37,7 @@ const (
 // var executionPath string = "/usr/local/bin/vnci"
 
 type IConnectionManager interface {
-	Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath string)
+	Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath string)
 	//加载数据
 	LoadData() (map[int]ConnectionItem, error)
 
@@ -71,7 +71,7 @@ type ConnectionManager struct {
 
 	data map[int]ConnectionItem
 
-	ConfigPath, TemplatePath, ServiceDestPath, ConfigDestPath, ExecutionPath string
+	ConfigPath, TemplatePath, ServiceDestPath, ConfigDestPath, ExecutionPath, LocalLibraryPath string
 }
 
 func (_self *ConnectionManager) Get(key int) (*ConnectionItem, error) {
@@ -79,7 +79,7 @@ func (_self *ConnectionManager) Get(key int) (*ConnectionItem, error) {
 		var data = _self.data[key]
 		return &data, nil
 	}
-	return nil, errors.New("Not found")
+	return nil, errors.New("not found")
 }
 
 func (_self *ConnectionManager) ToggleStatus(conn ConnectionItem) StatusType {
@@ -218,14 +218,28 @@ func (_self *ConnectionManager) List() {
 	table.Render()
 }
 
-func (_self *ConnectionManager) Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath string) {
+func (_self *ConnectionManager) Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath string) {
 	_self.TemplatePath = templatePath
 	_self.ServiceDestPath = serviceDestPath
 	_self.ConfigDestPath = configDestPath
 	_self.ExecutionPath = executionPath
 	_self.ConfigPath = configPath
+	_self.LocalLibraryPath = localLibraryPath
+
 	_self.data = make(map[int]ConnectionItem)
 	_self.mu = sync.Mutex{}
+
+	os.MkdirAll(_self.ConfigDestPath+"/udp2raw", 0777)
+	os.MkdirAll(_self.ExecutionPath, 0777)
+	utils.Copy(_self.LocalLibraryPath+"/udp2raw/udp2raw", _self.ExecutionPath+"/udp2raw")
+
+	cmd := exec.Command("chmod", "+x", "/usr/local/bin/vnci/udp2raw")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		logger.Errorln("cmd.Run() failed with %s\n", err)
+	}
+	logger.Infoln("combined out:\n%s\n", string(out))
+
 	_self.LoadConfig()
 }
 
