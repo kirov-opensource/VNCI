@@ -130,12 +130,12 @@ func ToggleTunnelStatus() {
 		}
 	})
 }
+
 func ListTunnel() {
 	connectionManager.List()
 }
 
 func main() {
-	// logger.Init("VNCI", true, true, "./logs/log.log")
 	connectionManager.Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath)
 
 	// 把用户传递的命令行参数解析为对应变量的值

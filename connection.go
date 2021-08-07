@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -86,12 +85,7 @@ func (_self *ConnectionManager) Initial(configPath, templatePath, serviceDestPat
 	os.MkdirAll(_self.ExecutionPath, 0777)
 	utils.Copy(_self.LocalLibraryPath+"/udp2raw/udp2raw", _self.ExecutionPath+"/udp2raw")
 
-	cmd := exec.Command("chmod", "+x", "/usr/local/bin/vnci/udp2raw")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		logger.Errorln("cmd.Run() failed with %s\n", err)
-	}
-	logger.Infoln("combined out:\n%s\n", string(out))
+	utils.RunCmd("chmod", "+x", "/usr/local/bin/vnci/udp2raw")
 
 	fileExist := utils.Exists(configPath)
 
