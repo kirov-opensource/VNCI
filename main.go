@@ -18,7 +18,6 @@ var localLibraryPath string = "./library"
 
 var connectionManager ConnectionManager
 
-// var connections = make(map[int]ConnectionItem)
 var configPath = "./configs/config.json"
 
 var runAs = *(flag.String("r", "t", "s:Service,t:Tools"))
@@ -65,6 +64,31 @@ func GetValueFromStdin(parameterName string, optional bool, hasDefaultValue bool
 	return result
 }
 
+func OperateTunnel(callback func(int)) {
+	ListTunnel()
+
+	f := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Print("请输入编号[NO],输入e退出>")
+		Input, _ := f.ReadString('\n')
+		Input = Input[:len(Input)-1]
+		if len(Input) == 0 {
+			continue
+		}
+		if Input == "e" {
+			break
+		}
+		dataId, err := strconv.Atoi(Input)
+		if err != nil {
+			fmt.Println("输入正确的编号")
+		}
+		if connectionManager.ContainsKey(dataId) {
+			callback(dataId)
+			break
+		}
+	}
+}
+
 func CreateTunnel() {
 	var actualType ConnectionType
 	tunnelType := GetValueFromStdin("通道类型(Server/Client)", false, true, "Client", nil)
@@ -89,64 +113,29 @@ func CreateTunnel() {
 }
 
 func DeleteTunnel() {
-	connectionManager.List()
-
-	f := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print("请输入编号[NO],输入exit退出>")
-		Input, _ := f.ReadString('\n')
-		Input = Input[:len(Input)-1]
-		if len(Input) == 0 {
-			continue
-		}
-		if Input == "exit" {
-			break
-		}
-		dataId, err := strconv.Atoi(Input)
-		if err != nil {
-			fmt.Println("输入正确的编号")
-		}
-		if connectionManager.ContainsKey(dataId) {
-			connectionManager.Remove(dataId)
-			fmt.Println("删除成功")
-			break
-		}
-	}
+	OperateTunnel(func(dataId int) {
+		connectionManager.Remove(dataId)
+		fmt.Println("删除成功")
+	})
 }
 
 func ToggleTunnelStatus() {
+	OperateTunnel(func(dataId int) {
+		data, _ := connectionManager.Get(dataId)
+		newStatus := connectionManager.ToggleStatus(data)
+		if newStatus == StatusTypeActive {
+			fmt.Println("切换成功,已启用")
+		} else {
+			fmt.Println("切换成功,已停止")
+		}
+	})
+}
+func ListTunnel() {
 	connectionManager.List()
-
-	f := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print("请输入编号[NO],输入exit退出>")
-		Input, _ := f.ReadString('\n')
-		Input = Input[:len(Input)-1]
-		if len(Input) == 0 {
-			continue
-		}
-		if Input == "exit" {
-			break
-		}
-		dataId, err := strconv.Atoi(Input)
-		if err != nil {
-			fmt.Println("输入正确的编号")
-		}
-		if connectionManager.ContainsKey(dataId) {
-			data, _ := connectionManager.Get(dataId)
-			newStatus := connectionManager.ToggleStatus(*data)
-			data.Status = newStatus
-			if newStatus == StatusTypeActive {
-				fmt.Println("切换成功,已启用")
-			} else {
-				fmt.Println("切换成功,已停止")
-			}
-			break
-		}
-	}
 }
 
 func main() {
+	// logger.Init("VNCI", true, true, "./logs/log.log")
 	connectionManager.Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath)
 
 	// 把用户传递的命令行参数解析为对应变量的值
@@ -155,12 +144,12 @@ func main() {
 	if runAs == "t" {
 		f := bufio.NewReader(os.Stdin) //读取输入的内容
 		for {
-			fmt.Println("l(list):\t列表")
-			fmt.Println("n(new):\t新增")
-			fmt.Println("d(delete):\t删除")
-			fmt.Println("s(sync):\t同步")
-			fmt.Println("t(toggle):\t切换状态")
-			fmt.Print("请输入一些字符串,输入e(exit)退出>")
+			fmt.Println("l:\t列表")
+			fmt.Println("n:\t新增")
+			fmt.Println("d:\t删除")
+			fmt.Println("s:\t同步")
+			fmt.Println("t:\t切换状态")
+			fmt.Print("请输入一些字符串,输入e退出>")
 			Input, _ := f.ReadString('\n') //定义一行输入的内容分隔符。
 			Input = Input[:len(Input)-1]
 			if len(Input) == 0 {
@@ -171,7 +160,7 @@ func main() {
 			}
 			switch Input {
 			case "l":
-				connectionManager.List()
+				ListTunnel()
 			case "n":
 				CreateTunnel()
 			case "d":

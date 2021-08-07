@@ -109,6 +109,14 @@ func (_self *ConnectionManager) Initial(configPath, templatePath, serviceDestPat
 func (_self *ConnectionManager) Get(key int) (*ConnectionItem, error) {
 	if _self.ContainsKey(key) {
 		var data = _self.data[key]
+		var a = _self.data[key]
+
+		// &_self.data
+		// a := (*sData)[key]
+
+		fmt.Printf("%p\n", &a)
+		fmt.Printf("%p\n", &_self.data)
+		fmt.Printf("%p\n", &data)
 		return &data, nil
 	}
 	return nil, errors.New("not found")
@@ -159,11 +167,14 @@ func (_self *ConnectionManager) ContainsKey(key int) bool {
 	}
 }
 
-func (_self *ConnectionManager) Add(item ConnectionItem) {
+func (_self *ConnectionManager) Add(item ConnectionItem) bool {
 	if !_self.ContainsKey(item.LocalPort) {
 		_self.data[item.LocalPort] = item
+		_self.SaveConfig()
+		return true
 	} else {
 		logger.Errorln("本地端口已被占用")
+		return false
 	}
 }
 
@@ -171,46 +182,36 @@ func (_self *ConnectionManager) Remove(key int) bool {
 	if _self.ContainsKey(key) {
 		delete(_self.data, key)
 		logger.Infoln("删除成功")
+		_self.SaveConfig()
 		return true
 	} else {
 		return false
 	}
 }
 
-func (_self *ConnectionManager) ToggleStatus(conn ConnectionItem) StatusType {
-	_, serviceFileName := connectionManager.SyncPhysicalFiles(conn)
+func (_self *ConnectionManager) ToggleStatus(conn *ConnectionItem) StatusType {
+	_, serviceFileName := connectionManager.SyncPhysicalFiles(*conn)
 	serviceName := serviceFileName[0:strings.LastIndex(serviceFileName, ".")]
 
-	cmd := exec.Command("systemctl", "daemon-reload")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		logger.Fatalln("cmd.Run() failed with %s\n", err)
-	}
-	logger.Infoln("combined out:\n%s\n", string(out))
+	utils.RunCmd("systemctl", "daemon-reload")
+
+	newStatusType := conn.Status
 
 	if conn.Status == StatusTypeActive {
-		cmd = exec.Command("systemctl", "stop", serviceName)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			logger.Fatalln("cmd.Run() failed with %s\n", err)
+		if ok := utils.RunCmd("systemctl", "stop", serviceName); ok {
+			newStatusType = StatusTypeDisable
 		}
-		logger.Infoln("combined out:\n%s\n", string(out))
-		return StatusTypeDisable
 	} else {
-		cmd = exec.Command("systemctl", "stop", serviceName)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			logger.Fatalln("cmd.Run() failed with %s\n", err)
+		if ok := utils.RunCmd("systemctl", "stop", serviceName); ok {
+			if ok = utils.RunCmd("systemctl", "start", serviceName); ok {
+				newStatusType = StatusTypeActive
+			}
 		}
-		logger.Infoln("combined out:\n%s\n", string(out))
-		cmd = exec.Command("systemctl", "start", serviceName)
-		out, err = cmd.CombinedOutput()
-		if err != nil {
-			logger.Fatalln("cmd.Run() failed with %s\n", err)
-		}
-		logger.Infoln("combined out:\n%s\n", string(out))
-		return StatusTypeActive
 	}
+	conn.Status = newStatusType
+	_self.data[conn.LocalPort] = *conn
+	_self.SaveConfig()
+	return newStatusType
 }
 
 func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, string) {
