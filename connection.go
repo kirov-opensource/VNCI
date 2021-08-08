@@ -253,7 +253,7 @@ func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, 
 
 	udp2rawServiceTemplate, _ := template.New("test").Parse(string(utils.ReadFile(_self.TemplatePath + "/udp2raw.service.template")))
 	serviceFileName := "vnci@udp2raw@" + strconv.Itoa(conn.LocalPort) + "@" + (&confRenderModel).ConnectionType + ".service"
-	serviceFilePath := _self.ServiceDestPath + serviceFileName
+	serviceFilePath := _self.ServiceDestPath + "/" + serviceFileName
 	fileInfo, err = os.Create(serviceFilePath)
 	if err != nil {
 		fmt.Println("创建文件出错:", err)

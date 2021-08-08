@@ -21,7 +21,7 @@
         "authMode": "md5",
         "password": "",
         "connectionType": "Server",
-        "status": "Active"
+        "status": "Disable"
     },
     "32666": {
         "localAddress": "0.0.0.0",
@@ -33,7 +33,7 @@
         "authMode": "md5",
         "password": "",
         "connectionType": "Client",
-        "status": "Active"
+        "status": "Disable"
     },
     "46574": {
         "localAddress": "0.0.0.0",
@@ -45,6 +45,6 @@
         "authMode": "md5",
         "password": "",
         "connectionType": "Client",
-        "status": "Active"
+        "status": "Disable"
     }
 }
