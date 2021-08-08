@@ -6,3 +6,4 @@
 --raw-mode {{.RawMode}}
 --cipher-mode {{.CipherMode}}
 --auth-mode {{.AuthMode}}
+{{.ExtraOptions}}

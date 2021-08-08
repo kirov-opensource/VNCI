@@ -65,7 +65,7 @@ type IConnectionManager interface {
 type ConnectionManager struct {
 	mu sync.Mutex
 
-	data map[int]ConnectionItem
+	data map[int]*ConnectionItem
 
 	ConfigPath, TemplatePath, ServiceDestPath, ConfigDestPath, ExecutionPath, LocalLibraryPath string
 }
@@ -78,7 +78,7 @@ func (_self *ConnectionManager) Initial(configPath, templatePath, serviceDestPat
 	_self.ConfigPath = configPath
 	_self.LocalLibraryPath = localLibraryPath
 
-	_self.data = make(map[int]ConnectionItem)
+	_self.data = make(map[int]*ConnectionItem)
 	_self.mu = sync.Mutex{}
 
 	os.MkdirAll(_self.ConfigDestPath+"/udp2raw", 0777)
@@ -111,7 +111,7 @@ func (_self *ConnectionManager) Get(key int) (*ConnectionItem, error) {
 		fmt.Printf("%p\n", &a)
 		fmt.Printf("%p\n", &_self.data)
 		fmt.Printf("%p\n", &data)
-		return &data, nil
+		return data, nil
 	}
 	return nil, errors.New("not found")
 }
@@ -161,7 +161,7 @@ func (_self *ConnectionManager) ContainsKey(key int) bool {
 	}
 }
 
-func (_self *ConnectionManager) Add(item ConnectionItem) bool {
+func (_self *ConnectionManager) Add(item *ConnectionItem) bool {
 	if !_self.ContainsKey(item.LocalPort) {
 		_self.data[item.LocalPort] = item
 		_self.SaveConfig()
@@ -203,7 +203,7 @@ func (_self *ConnectionManager) ToggleStatus(conn *ConnectionItem) StatusType {
 		}
 	}
 	conn.Status = newStatusType
-	_self.data[conn.LocalPort] = *conn
+	// _self.data[conn.LocalPort] = conn
 	_self.SaveConfig()
 	return newStatusType
 }
@@ -221,6 +221,7 @@ func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, 
 		RawMode        string
 		CipherMode     string
 		AuthMode       string
+		ExtraOptions   string
 	}{
 		ConnectionType: "",
 		Local:          conn.LocalAddress + ":" + strconv.Itoa(conn.LocalPort),
@@ -229,6 +230,7 @@ func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, 
 		CipherMode:     conn.CipherMode,
 		AuthMode:       conn.AuthMode,
 		Password:       conn.Password,
+		ExtraOptions:   conn.ExtraOptions,
 	}
 	if conn.ConnectionType == ConnectionTypeClient {
 		(&confRenderModel).ConnectionType = "c"
@@ -246,9 +248,11 @@ func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, 
 	udp2rawConfTemplate.Execute(fileInfo, confRenderModel)
 
 	serviceRenderModel := struct {
-		Port string
+		Port          string
+		ExceutionPath string
 	}{
-		Port: strconv.Itoa(conn.LocalPort),
+		Port:          strconv.Itoa(conn.LocalPort),
+		ExceutionPath: _self.ExecutionPath,
 	}
 
 	udp2rawServiceTemplate, _ := template.New("test").Parse(string(utils.ReadFile(_self.TemplatePath + "/udp2raw.service.template")))
@@ -263,7 +267,7 @@ func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, 
 	return confFileName, serviceFileName
 }
 
-func (_self *ConnectionManager) LoadConfig() (map[int]ConnectionItem, error) {
+func (_self *ConnectionManager) LoadConfig() (map[int]*ConnectionItem, error) {
 
 	logger.Infoln("正在加载配置...")
 
@@ -308,4 +312,12 @@ type ConnectionItem struct {
 	Password       string         `json:"password"`
 	ConnectionType ConnectionType `json:"connectionType"`
 	Status         StatusType     `json:"status"`
+	MD5            string         `json:"md5"`
+	ExtraOptions   string         `json:"extraOptions"`
+}
+
+func NewConnectionItem(item ConnectionItem) *ConnectionItem {
+	var message = fmt.Sprintf("%s%s%d%s%s%s%s%s", item.LocalAddress, item.RemoteAddress, item.RemotePort, item.RawMode, item.CipherMode, item.AuthMode, item.Password, item.ExtraOptions)
+	item.MD5 = utils.MD5(message)
+	return &item
 }

@@ -50,7 +50,7 @@ func GetValueFromStdin(parameterName string, optional bool, hasDefaultValue bool
 			}
 		}
 		if validFunc != nil {
-			if validFunc(Input) == true {
+			if validFunc(Input) {
 				result = Input
 				break
 			}
@@ -107,9 +107,9 @@ func CreateTunnel() {
 	authMode := GetValueFromStdin("认证方式", false, true, "md5", nil)
 	password := GetValueFromStdin("密码", false, false, "", nil)
 
-	connectionManager.Add(ConnectionItem{localAddress,
+	connectionManager.Add(NewConnectionItem(ConnectionItem{localAddress,
 		localPort, remoteAddress, remotePort,
-		rawMode, cipherMode, authMode, password, actualType, StatusTypeDisable})
+		rawMode, cipherMode, authMode, password, actualType, StatusTypeDisable, "", ""}))
 }
 
 func DeleteTunnel() {
