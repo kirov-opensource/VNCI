@@ -16,26 +16,12 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-type StatusType string
-
-const (
-	StatusTypeActive  StatusType = "Active"
-	StatusTypeDisable StatusType = "Disable"
-)
-
-type ConnectionType string
-
-const (
-	ConnectionTypeClient ConnectionType = "Client"
-	ConnectionTypeServer ConnectionType = "Server"
-)
-
-type IConnectionManager interface {
+type IUDP2RawConnectionManager interface {
 	// 初始化
 	Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath string)
 
 	// 加载数据
-	LoadData() (map[int]ConnectionItem, error)
+	LoadData() (map[int]UDP2RawConnection, error)
 
 	// 打印列表
 	List()
@@ -44,7 +30,7 @@ type IConnectionManager interface {
 	SaveConfig() error
 
 	// 添加链接
-	Add(item ConnectionItem) error
+	Add(item UDP2RawConnection) error
 
 	// 删除链接
 	Remove(key int) bool
@@ -53,24 +39,24 @@ type IConnectionManager interface {
 	ContainsKey(key int) bool
 
 	// 获取
-	Get(key int) (*ConnectionItem, error)
+	Get(key int) (*UDP2RawConnection, error)
 
 	// 同步物理文件
-	SyncPhysicalFiles(item ConnectionItem) (string, string)
+	SyncPhysicalFiles(item UDP2RawConnection) (string, string)
 
 	// 切换状态
-	ToggleStatus(conn ConnectionItem) StatusType
+	ToggleStatus(conn UDP2RawConnection) UDP2RawConnectionStatusType
 }
 
-type ConnectionManager struct {
+type UDP2RawConnectionManager struct {
 	mu sync.Mutex
 
-	data map[int]*ConnectionItem
+	data map[int]*UDP2RawConnection
 
 	ConfigPath, TemplatePath, ServiceDestPath, ConfigDestPath, ExecutionPath, LocalLibraryPath string
 }
 
-func (_self *ConnectionManager) Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath string) {
+func (_self *UDP2RawConnectionManager) Initial(configPath, templatePath, serviceDestPath, configDestPath, executionPath, localLibraryPath string) {
 	_self.TemplatePath = templatePath
 	_self.ServiceDestPath = serviceDestPath
 	_self.ConfigDestPath = configDestPath
@@ -78,7 +64,7 @@ func (_self *ConnectionManager) Initial(configPath, templatePath, serviceDestPat
 	_self.ConfigPath = configPath
 	_self.LocalLibraryPath = localLibraryPath
 
-	_self.data = make(map[int]*ConnectionItem)
+	_self.data = make(map[int]*UDP2RawConnection)
 	_self.mu = sync.Mutex{}
 
 	os.MkdirAll(_self.ConfigDestPath+"/udp2raw", 0777)
@@ -100,7 +86,7 @@ func (_self *ConnectionManager) Initial(configPath, templatePath, serviceDestPat
 	_self.LoadConfig()
 }
 
-func (_self *ConnectionManager) Get(key int) (*ConnectionItem, error) {
+func (_self *UDP2RawConnectionManager) Get(key int) (*UDP2RawConnection, error) {
 	if _self.ContainsKey(key) {
 		var data = _self.data[key]
 		var a = _self.data[key]
@@ -116,7 +102,7 @@ func (_self *ConnectionManager) Get(key int) (*ConnectionItem, error) {
 	return nil, errors.New("not found")
 }
 
-func (_self *ConnectionManager) List() {
+func (_self *UDP2RawConnectionManager) List() {
 	tunnelSize := len(_self.data)
 
 	if tunnelSize == 0 {
@@ -153,7 +139,7 @@ func (_self *ConnectionManager) List() {
 	table.Render()
 }
 
-func (_self *ConnectionManager) ContainsKey(key int) bool {
+func (_self *UDP2RawConnectionManager) ContainsKey(key int) bool {
 	if _, ok := _self.data[key]; ok {
 		return true
 	} else {
@@ -161,7 +147,7 @@ func (_self *ConnectionManager) ContainsKey(key int) bool {
 	}
 }
 
-func (_self *ConnectionManager) Add(item *ConnectionItem) bool {
+func (_self *UDP2RawConnectionManager) Add(item *UDP2RawConnection) bool {
 	if !_self.ContainsKey(item.LocalPort) {
 		_self.data[item.LocalPort] = item
 		_self.SaveConfig()
@@ -172,7 +158,7 @@ func (_self *ConnectionManager) Add(item *ConnectionItem) bool {
 	}
 }
 
-func (_self *ConnectionManager) Remove(key int) bool {
+func (_self *UDP2RawConnectionManager) Remove(key int) bool {
 	if _self.ContainsKey(key) {
 		delete(_self.data, key)
 		logger.Infoln("删除成功")
@@ -183,7 +169,7 @@ func (_self *ConnectionManager) Remove(key int) bool {
 	}
 }
 
-func (_self *ConnectionManager) ToggleStatus(conn *ConnectionItem) StatusType {
+func (_self *UDP2RawConnectionManager) ToggleStatus(conn *UDP2RawConnection) UDP2RawConnectionStatusType {
 	_, serviceFileName := connectionManager.SyncPhysicalFiles(*conn)
 	serviceName := serviceFileName[0:strings.LastIndex(serviceFileName, ".")]
 
@@ -208,7 +194,7 @@ func (_self *ConnectionManager) ToggleStatus(conn *ConnectionItem) StatusType {
 	return newStatusType
 }
 
-func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, string) {
+func (_self *UDP2RawConnectionManager) SyncPhysicalFiles(conn UDP2RawConnection) (string, string) {
 	actualRemoteAddress := conn.RemoteAddress
 	if !utils.CheckIPAddress(actualRemoteAddress) {
 		actualRemoteAddress = utils.GetActualIP(actualRemoteAddress)
@@ -248,11 +234,13 @@ func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, 
 	udp2rawConfTemplate.Execute(fileInfo, confRenderModel)
 
 	serviceRenderModel := struct {
-		Port          string
-		ExceutionPath string
+		Port           string
+		ExceutionPath  string
+		ConfigDestPath string
 	}{
-		Port:          strconv.Itoa(conn.LocalPort),
-		ExceutionPath: _self.ExecutionPath,
+		Port:           strconv.Itoa(conn.LocalPort),
+		ExceutionPath:  _self.ExecutionPath,
+		ConfigDestPath: _self.ConfigDestPath,
 	}
 
 	udp2rawServiceTemplate, _ := template.New("test").Parse(string(utils.ReadFile(_self.TemplatePath + "/udp2raw.service.template")))
@@ -267,7 +255,7 @@ func (_self *ConnectionManager) SyncPhysicalFiles(conn ConnectionItem) (string, 
 	return confFileName, serviceFileName
 }
 
-func (_self *ConnectionManager) LoadConfig() (map[int]*ConnectionItem, error) {
+func (_self *UDP2RawConnectionManager) LoadConfig() (map[int]*UDP2RawConnection, error) {
 
 	logger.Infoln("正在加载配置...")
 
@@ -284,7 +272,7 @@ func (_self *ConnectionManager) LoadConfig() (map[int]*ConnectionItem, error) {
 	}
 }
 
-func (_self *ConnectionManager) SaveConfig() error {
+func (_self *UDP2RawConnectionManager) SaveConfig() error {
 	logger.Infoln("正在保存...")
 	text, err := json.MarshalIndent(_self.data, "", "    ")
 	if err != nil {
@@ -301,22 +289,36 @@ func (_self *ConnectionManager) SaveConfig() error {
 	return nil
 }
 
-type ConnectionItem struct {
-	LocalAddress   string         `json:"localAddress"`
-	LocalPort      int            `json:"localPort"`
-	RemoteAddress  string         `json:"remoteAddress"`
-	RemotePort     int            `json:"remotePort"`
-	RawMode        string         `json:"rawMode"`
-	CipherMode     string         `json:"cipherMode"`
-	AuthMode       string         `json:"authMode"`
-	Password       string         `json:"password"`
-	ConnectionType ConnectionType `json:"connectionType"`
-	Status         StatusType     `json:"status"`
-	MD5            string         `json:"md5"`
-	ExtraOptions   string         `json:"extraOptions"`
+type UDP2RawConnectionStatusType string
+
+const (
+	StatusTypeActive  UDP2RawConnectionStatusType = "Active"
+	StatusTypeDisable UDP2RawConnectionStatusType = "Disable"
+)
+
+type UDP2RawConnectionType string
+
+const (
+	ConnectionTypeClient UDP2RawConnectionType = "Client"
+	ConnectionTypeServer UDP2RawConnectionType = "Server"
+)
+
+type UDP2RawConnection struct {
+	LocalAddress   string                      `json:"localAddress"`
+	LocalPort      int                         `json:"localPort"`
+	RemoteAddress  string                      `json:"remoteAddress"`
+	RemotePort     int                         `json:"remotePort"`
+	RawMode        string                      `json:"rawMode"`
+	CipherMode     string                      `json:"cipherMode"`
+	AuthMode       string                      `json:"authMode"`
+	Password       string                      `json:"password"`
+	ConnectionType UDP2RawConnectionType       `json:"connectionType"`
+	Status         UDP2RawConnectionStatusType `json:"status"`
+	MD5            string                      `json:"md5"`
+	ExtraOptions   string                      `json:"extraOptions"`
 }
 
-func NewConnectionItem(item ConnectionItem) *ConnectionItem {
+func NewUDP2RawConnection(item UDP2RawConnection) *UDP2RawConnection {
 	var message = fmt.Sprintf("%s%s%d%s%s%s%s%s", item.LocalAddress, item.RemoteAddress, item.RemotePort, item.RawMode, item.CipherMode, item.AuthMode, item.Password, item.ExtraOptions)
 	item.MD5 = utils.MD5(message)
 	return &item

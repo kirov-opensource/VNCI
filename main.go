@@ -16,7 +16,7 @@ var configDestPath string = "/usr/local/etc/vnci"
 var executionPath string = "/usr/local/bin/vnci"
 var localLibraryPath string = "./library"
 
-var connectionManager ConnectionManager
+var connectionManager UDP2RawConnectionManager
 
 var configPath = "./configs/config.json"
 
@@ -90,7 +90,7 @@ func OperateTunnel(callback func(int)) {
 }
 
 func CreateTunnel() {
-	var actualType ConnectionType
+	var actualType UDP2RawConnectionType
 	tunnelType := GetValueFromStdin("通道类型(Server/Client)", false, true, "Client", nil)
 	if tunnelType == string(ConnectionTypeClient) {
 		actualType = ConnectionTypeClient
@@ -107,7 +107,7 @@ func CreateTunnel() {
 	authMode := GetValueFromStdin("认证方式", false, true, "md5", nil)
 	password := GetValueFromStdin("密码", false, false, "", nil)
 
-	connectionManager.Add(NewConnectionItem(ConnectionItem{localAddress,
+	connectionManager.Add(NewUDP2RawConnection(UDP2RawConnection{localAddress,
 		localPort, remoteAddress, remotePort,
 		rawMode, cipherMode, authMode, password, actualType, StatusTypeDisable, "", ""}))
 }

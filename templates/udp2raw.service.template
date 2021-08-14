@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart={{.ExceutionPath}}/udp2raw --conf-file /usr/local/etc/vnci/udp2raw/{{.Port}}.conf
+ExecStart={{.ExceutionPath}}/udp2raw --conf-file {{.ConfigDestPath}}/udp2raw/{{.Port}}.conf
 
 [Install]
 WantedBy=multi-user.target

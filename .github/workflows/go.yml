@@ -2,33 +2,30 @@ name: Go
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.16
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.16
 
-    - name: Build
-      run: |
-        mkdir ./dist
-        mkdir ./dist/configs
-        echo "{}" >> ./dist/configs/config.json
-        go build -o ./dist main.go types.go connection.go
-        cp -r libraries/ ./dist/
+      - name: Build
+        run: |
+          mkdir ./dist
+          mkdir ./dist/configs
+          echo "{}" >> ./dist/configs/config.json
+          go build -o ./dist/vnci main.go udp2raw_connection_manager.go
+          cp -r libraries/ ./dist/
 
-    - name: Upload a Build Artifact
-      uses: actions/upload-artifact@v2.2.4
-      with:
-        path: ./dist
-        
-      
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v2.2.4
+        with:
+          path: ./dist
