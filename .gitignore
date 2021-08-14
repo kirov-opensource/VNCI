@@ -3,3 +3,4 @@ main
 /.idea/*
 /dist
 __debug_bin
+/configs/config.json
