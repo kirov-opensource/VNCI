@@ -22,7 +22,7 @@ jobs:
           mkdir ./dist
           mkdir ./dist/configs
           echo "{}" >> ./dist/configs/config.json
-          go build -o ./dist/vnci main.go udp2raw_connection_manager.go
+          go build -o ./dist/vnci main.go udp2raw_connection_manager.go wireguard_connection_manager.go
           cp -r libraries/ ./dist/
 
       - name: Upload a Build Artifact
